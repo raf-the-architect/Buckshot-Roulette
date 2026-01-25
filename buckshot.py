@@ -98,44 +98,39 @@ class Player():
         temp = self.items
         temp.remove(item)
         self.items = temp
+        global name
         print(f"[{name}] USED:",item)
         time.sleep(1)
-        match item:
-            case '🔪':
-                gun.doubleDamage()
-                print("Shotgun now does 2 damage.")
-
-            case '🔍':
-                print("Shhhh~~~")
-                time.sleep(1)
-                print(".. The next round is..")
-                time.sleep(2)
-                print(["blank.", "LIVE."][gun.rounds[-1]])
-                time.sleep(1)
-                print("~~~~~~~~~~")
-
-            case '⛓':
-                if not effector: return False
-                effector.missTurns(1)
-                print("Dealer will now miss a turn.")
-            
-            case '🍺':
-                print("Shotgun has been racked.")
-                r = gun.pickRound()
-                time.sleep(1)
-                print("Round was..")
-                time.sleep(1.5)
-                print(["blank.","LIVE."][r])
-
-            case '🚬':
-                self.addHealth()
-                print(self.health)
-
-            case _:
-                print("uhm....")
-                time.sleep(3)
-                print("Game does not recognise the item.")
-                return False
+        if item == '🔪':
+            gun.doubleDamage()
+            print("Shotgun now does 2 damage.")
+        elif item == '🔍':
+            print("Shhhh~~~")
+            time.sleep(1)
+            print(".. The next round is..")
+            time.sleep(2)
+            print(["blank.", "LIVE."][gun.rounds[-1]])
+            time.sleep(1)
+            print("~~~~~~~~~~")
+        elif item == '⛓':
+            if not effector: return False
+            effector.missTurns(1)
+            print("Dealer will now miss a turn.")
+        elif item == '🍺':
+            print("Shotgun has been racked.")
+            r = gun.pickRound()
+            time.sleep(1)
+            print("Round was..")
+            time.sleep(1.5)
+            print(["blank.","LIVE."][r])
+        elif item == '🚬':
+            self.addHealth()
+            print(self.health)
+        else:
+            print("uhm....")
+            time.sleep(3)
+            print("Game does not recognise the item.")
+            return False
         time.sleep(1)
         return True
     
@@ -156,41 +151,40 @@ class AI(Player):
         print("[DEALER] used",item)
         time.sleep(1.5)
 
-        match item:
-            case '⛓':
-                effector.missTurns()
-                print("[DEALER] cuffed you.")
-            case '🔪':
-                gun.doubleDamage()
-                time.sleep(0.7)
-                print("Shotgun now does 2 damage.")
-            case '🚬':
-                self.addHealth()
-                time.sleep(0.7)
-                print("[DEALER] now has",self.health,"lives.")
-            case '🍺':
-                print("Gun has been racked.")
-                r = gun.pickRound()
-                time.sleep(0.5)
-                print("THE ROUND IS..")
-                time.sleep(0.7)
-                print()
-                time.sleep(0.7)
-                print(["blank.","LIVE."][r])
-            case '🔍':
-                r = gun.rounds[-1]
-                print("[DEALER] has inspected the gun 🔍...")
-                time.sleep(1)
-                print("##############################",r)
-                if r:
-                    self.useItem('🔪',gun=gun)
-                    self.shoot(gun,effector)
-                    return True
-                self.shoot(gun)
+        if item == '⛓':
+            effector.missTurns()
+            print("[DEALER] cuffed you.")
+        elif item == '🔪':
+            gun.doubleDamage()
+            time.sleep(0.7)
+            print("Shotgun now does 2 damage.")
+        elif item == '🚬':
+            self.addHealth()
+            time.sleep(0.7)
+            print("[DEALER] now has",self.health,"lives.")
+        elif item == '🍺':
+            print("Gun has been racked.")
+            r = gun.pickRound()
+            time.sleep(0.5)
+            print("THE ROUND IS..")
+            time.sleep(0.7)
+            print()
+            time.sleep(0.7)
+            print(["blank.","LIVE."][r])
+        elif item == '🔍':
+            r = gun.rounds[-1]
+            print("[DEALER] has inspected the gun 🔍...")
+            time.sleep(1)
+            # Removed debug print of r
+            if r:
+                self.useItem('🔪',gun=gun)
+                self.shoot(gun,effector)
                 return True
-                
-        time.sleep(1)
-        return True
+            self.shoot(gun)
+            return True
+        else:
+            time.sleep(1)
+            return True
 
     def shoot(self,gun,effector=None):
         r = gun.pickRound()
