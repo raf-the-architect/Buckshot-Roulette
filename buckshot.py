@@ -126,11 +126,12 @@ class Player():
         elif item == '🚬':
             self.addHealth()
             print(self.health)
-        else:
+        elif item == '_':
             print("uhm....")
             time.sleep(3)
             print("Game does not recognise the item.")
             return False
+
         time.sleep(1)
         return True
     
@@ -182,9 +183,9 @@ class AI(Player):
                 return True
             self.shoot(gun)
             return True
-        else:
-            time.sleep(1)
-            return True
+        
+        time.sleep(1)
+        return True
 
     def shoot(self,gun,effector=None):
         r = gun.pickRound()
@@ -424,7 +425,7 @@ while p1.health > 0 and dealer.health > 0:
                     
                 
                 # ⛓, mag.g, knf, cg, 🍺
-                if random.choice([True,False]):
+                if dealer.items and random.choice([True,False]):
                     dealer.useItem(random.choice(dealer.items),p1,sg)
                     continue
 
