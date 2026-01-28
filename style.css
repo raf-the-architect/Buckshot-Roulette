@@ -1,0 +1,444 @@
+:root {
+  --bg-color: #e8d0b3; /* Warm wall color */
+  --table-color: #4a8f5d; /* Felt Green */
+  --table-dark: #3a7548;
+  --ui-blue: #3b95d9;
+  --ui-blue-dark: #2a75b0;
+  --ui-red: #e75a5a;
+  --ui-red-dark: #c03a3a;
+  --text-color: #333;
+  --font-main: "Fredoka", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-main);
+  background-color: var(--bg-color);
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+#game-container {
+  width: 100%;
+  max-width: 500px; /* Mobile-like constraint */
+  height: 95vh;
+  background-color: var(--table-color);
+  border-radius: 20px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+  border: 8px solid #3e2723; /* Wood frame */
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Header */
+header {
+  background-color: rgba(0, 0, 0, 0.1);
+  padding: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: white;
+  font-weight: 600;
+}
+
+.round-indicator {
+  background: #333;
+  padding: 5px 10px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+
+#message-log {
+  font-size: 0.9rem;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.2);
+}
+
+/* Zones */
+.player-zone {
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+}
+
+#dealer-zone {
+  border-bottom: 2px dashed rgba(0, 0, 0, 0.1);
+}
+
+#table-zone {
+  flex: 1.5;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
+/* Avatars */
+.avatar {
+  width: 80px;
+  height: 80px;
+  background-color: #fff;
+  border-radius: 50%;
+  border: 4px solid rgba(0, 0, 0, 0.2);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 2.5rem;
+  margin-bottom: 10px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.health-bar {
+  display: flex;
+  gap: 5px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 5px 10px;
+  border-radius: 20px;
+}
+
+.heart {
+  width: 20px;
+  height: 20px;
+  background-color: var(--ui-red);
+  clip-path: polygon(50% 0%, 100% 35%, 82% 100%, 50% 75%, 18% 100%, 0% 35%);
+  transition: opacity 0.3s;
+}
+
+.heart.lost {
+  opacity: 0.2;
+  background-color: #333;
+}
+
+/* Inventory */
+.inventory {
+  display: flex;
+  gap: 10px;
+  margin: 10px 0;
+  min-height: 50px;
+}
+
+.item {
+  width: 45px;
+  height: 45px;
+  background-color: #fff;
+  border-radius: 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 1.5rem;
+  cursor: pointer;
+  border-bottom: 4px solid #ccc;
+  transition: transform 0.1s;
+}
+
+.item:active {
+  transform: translateY(2px);
+  border-bottom-width: 2px;
+}
+
+/* Gun */
+.gun {
+  font-size: 5rem;
+  filter: drop-shadow(0 10px 10px rgba(0, 0, 0, 0.3));
+  transition: transform 0.5s;
+}
+
+.gun.aim-self {
+  transform: rotate(180deg) scaleX(-1);
+}
+
+/* Controls */
+#controls-overlay {
+  background: rgba(0, 0, 0, 0.2);
+  padding: 15px;
+  border-top: 2px dashed rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 15px;
+  width: 100%;
+}
+
+.btn {
+  flex: 1;
+  padding: 15px;
+  border: none;
+  border-radius: 12px;
+  font-family: var(--font-main);
+  font-size: 1rem;
+  font-weight: 700;
+  color: white;
+  cursor: pointer;
+  text-transform: uppercase;
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.2);
+  transition:
+    transform 0.1s,
+    box-shadow 0.1s;
+}
+
+.btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.2);
+}
+
+.btn-blue {
+  background-color: var(--ui-blue);
+  border-bottom: 5px solid var(--ui-blue-dark);
+}
+
+.btn-red {
+  background-color: var(--ui-red);
+  border-bottom: 5px solid var(--ui-red-dark);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(0.8);
+}
+
+/* Ammo Indicator */
+.ammo-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: white;
+  font-size: 0.8rem;
+}
+
+.ammo-count {
+  display: flex;
+  gap: 15px;
+  font-size: 1.2rem;
+  font-weight: bold;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 5px 15px;
+  border-radius: 20px;
+  margin-bottom: 5px;
+}
+
+/* Start Screen - Modern Switch Theme */
+#start-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #e60012; /* Switch Red */
+  background-image: linear-gradient(135deg, #ff2a2a, #d50000);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  z-index: 1000;
+  font-family: var(--font-main);
+  color: #333;
+}
+
+.switch-header {
+  padding: 20px 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: white;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.user-icon {
+  width: 50px;
+  height: 50px;
+  background: #009beb; /* Mario Blue */
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-weight: bold;
+  font-size: 1.5rem;
+  border: 4px solid white;
+}
+
+.switch-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 0 40px;
+  gap: 40px;
+}
+
+.side-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.menu-item {
+  width: 60px;
+  height: 60px;
+  background: #fff;
+  border-radius: 50%;
+  opacity: 0.5;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 0.8rem;
+  font-weight: bold;
+  color: #e60012;
+  cursor: pointer;
+}
+
+.menu-item.active {
+  opacity: 1;
+  transform: scale(1.1);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.game-card-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  flex: 1;
+  justify-content: center;
+}
+
+.game-card {
+  width: 250px;
+  background: white;
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  text-align: center;
+  transform: scale(1);
+  transition: transform 0.3s;
+  cursor: pointer;
+}
+
+.game-card:hover {
+  transform: scale(1.05); /* Pop effect */
+}
+
+.card-image {
+  height: 150px;
+  background: #2d2d2d;
+  border-radius: 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.gun-icon {
+  font-size: 4rem;
+}
+
+.card-title {
+  font-weight: bold;
+  font-size: 1.2rem;
+  color: #2d2d2d;
+}
+
+.start-interaction {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.start-interaction p {
+  color: white;
+  font-weight: bold;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 0.5; }
+  50% { opacity: 1; }
+  100% { opacity: 0.5; }
+}
+
+#player-name-input {
+  padding: 10px 20px;
+  border-radius: 20px;
+  border: none;
+  font-family: var(--font-main);
+  background: white;
+  margin-bottom: 5px;
+  text-align: center;
+  font-weight: bold;
+}
+
+.switch-btn {
+  padding: 10px 30px;
+  background: #009beb; /* Mario Blue */
+  color: white;
+  border: none;
+  border-radius: 20px;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 5px 0 #007bbd;
+}
+
+.switch-btn:disabled {
+  background: #555;
+  box-shadow: 0 5px 0 #333;
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+.switch-footer {
+  padding: 10px 40px;
+  color: white;
+  display: flex;
+  gap: 20px;
+  font-size: 0.9rem;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* Shell History Icons */
+.shells-display {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 20px;
+    height: 30px;
+}
+
+.shell-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+}
+
+.shell-icon.live {
+    background-color: #e75a5a; /* Red */
+    box-shadow: 0 0 10px #e75a5a;
+}
+
+.shell-icon.blank {
+    background-color: #3b95d9; /* Blue */
+    box-shadow: 0 0 10px #3b95d9;
+}
