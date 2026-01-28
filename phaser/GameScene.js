@@ -47,30 +47,79 @@ const LAYOUT = {
   WIDTH: 360,
   HEIGHT: 640,
   CENTER_X: 180,
-  TOP_ZONE: { y: 60 },
-  BOT_ITEMS_ZONE: { y: 125 },
-  GUN_ZONE: { y: 200 },
-  AMMO_ZONE: { y: 280 },
-  NEXT_AMMO_ZONE: { y: 235 },
-  BTN_ZONE: { y: 370 },
-  PLAYER_ITEMS_ZONE: { y: 460 },
+  TOP_ZONE: { y: 70 },
+  BOT_ITEMS_ZONE: { y: 135 },
+  GUN_ZONE: { y: 210 },
+  AMMO_ZONE: { y: 290 },
+  NEXT_AMMO_ZONE: { y: 245 },
+  BTN_ZONE: { y: 380 },
+  PLAYER_ITEMS_ZONE: { y: 470 },
   BOTTOM_ZONE: { y: 560 }
 };
 
 const SCALE = {
   AVATAR: 0.22,
   GUN: 0.4,
-  BUTTON: 0.5,
+  BUTTON_PRIMARY: 0.55,
+  BUTTON_SECONDARY: 0.45,
   AMMO: 0.25,
   HEART: 0.28,
-  ITEM: 0.18
+  ITEM: 0.16
 };
 
-const TINT_DISABLED = 0x555555;
+// ============================================================================
+// STYLE SYSTEM - Controlled Color Palette & Typography
+// ============================================================================
+const COLORS = {
+  // Primary palette
+  PRIMARY: "#4a90d9",
+  DANGER: "#c62828",
+  SUCCESS: "#43a047",
+  WARNING: "#f9a825",
+
+  // Neutral palette
+  TEXT_PRIMARY: "#ffffff",
+  TEXT_SECONDARY: "#a0a0a0",
+  TEXT_MUTED: "#666666",
+
+  // UI elements
+  PANEL_BG: 0x1a1a1a,
+  PANEL_BORDER: 0x333333,
+
+  // Tints
+  TINT_DISABLED: 0x555555,
+  TINT_ACTIVE: 0x4a90d9,
+  TINT_DANGER: 0xc62828
+};
+
+const FONTS = {
+  HEADLINE: {
+    fontFamily: "Inter, Arial, sans-serif",
+    fontSize: "20px",
+    fontStyle: "bold",
+    color: COLORS.TEXT_PRIMARY
+  },
+  LABEL: {
+    fontFamily: "Inter, Arial, sans-serif",
+    fontSize: "14px",
+    fontStyle: "600",
+    color: COLORS.TEXT_PRIMARY
+  },
+  BODY: {
+    fontFamily: "Inter, Arial, sans-serif",
+    fontSize: "12px",
+    color: COLORS.TEXT_SECONDARY
+  },
+  SMALL: {
+    fontFamily: "Inter, Arial, sans-serif",
+    fontSize: "10px",
+    color: COLORS.TEXT_MUTED
+  }
+};
 
 export class GameScene extends Phaser.Scene {
-  constructor() { 
-    super("Game"); 
+  constructor() {
+    super("Game");
   }
 
   init(data) {
@@ -99,7 +148,7 @@ export class GameScene extends Phaser.Scene {
     this.load.image("itemHandcuffs", base + ASSETS.ITEM_HANDCUFFS);
     this.load.image("itemBeer", base + ASSETS.ITEM_BEER);
     this.load.image("itemCigarette", base + ASSETS.ITEM_CIGARETTE);
-    
+
     // Load sounds
     this.load.audio("sndSpin", base + SOUNDS.REVOLVER_SPIN);
     this.load.audio("sndReload", base + SOUNDS.RELOAD);
@@ -126,23 +175,58 @@ export class GameScene extends Phaser.Scene {
     this.roundStartBlank = this.state.shotgun.blank;
     this.roundStartTotal = this.state.shotgun.chamber.length;
     this.nextAmmoRevealed = null;
-    this.betweenRounds = false;  // true during 3s timeout between rounds
+    this.betweenRounds = false;
 
     // Background
     this.add.image(LAYOUT.CENTER_X, LAYOUT.HEIGHT / 2, "bg")
       .setDisplaySize(LAYOUT.WIDTH, LAYOUT.HEIGHT);
 
+    // Subtle vignette overlay
+    this.add.rectangle(LAYOUT.CENTER_X, LAYOUT.HEIGHT / 2, LAYOUT.WIDTH, LAYOUT.HEIGHT, 0x000000, 0.25);
+
+    this.setupHUD();
     this.setupPlayers();
     this.setupGun();
     this.setupUI();
     this.render();
 
     // Background music (loop + low volume)
-    this.sound.play("sndMusic", { loop: true, volume: 0.1 });
+    this.sound.play("sndMusic", { loop: true, volume: 0.08 });
 
     // Start first round
     console.log("[STATE] Game Started");
     this.startAmmoReveal();
+  }
+
+  // ==========================================================================
+  // HUD SETUP - Styled Panels
+  // ==========================================================================
+  setupHUD() {
+    // Round indicator panel (top-left)
+    const roundPanel = this.add.container(60, 18);
+    const roundBg = this.add.rectangle(0, 0, 100, 28, COLORS.PANEL_BG, 0.8)
+      .setStrokeStyle(1, COLORS.PANEL_BORDER);
+    this.hudRound = this.add.text(0, 0, "Round 1", {
+      ...FONTS.LABEL,
+      fontSize: "13px"
+    }).setOrigin(0.5);
+    roundPanel.add([roundBg, this.hudRound]);
+
+    // Turn indicator panel (top-right)
+    const turnPanel = this.add.container(LAYOUT.WIDTH - 70, 18);
+    const turnBg = this.add.rectangle(0, 0, 120, 28, COLORS.PANEL_BG, 0.8)
+      .setStrokeStyle(1, COLORS.PANEL_BORDER);
+    this.hudTurn = this.add.text(0, 0, "Your Turn", {
+      ...FONTS.LABEL,
+      fontSize: "13px"
+    }).setOrigin(0.5);
+    this.turnBg = turnBg;
+    this.turnPanel = turnPanel;
+    turnPanel.add([turnBg, this.hudTurn]);
+
+    // Turn glow indicator
+    this.turnGlow = this.add.rectangle(LAYOUT.WIDTH - 70, 18, 124, 32, 0x4a90d9, 0)
+      .setStrokeStyle(2, 0x4a90d9);
   }
 
   // ==========================================================================
@@ -151,70 +235,70 @@ export class GameScene extends Phaser.Scene {
 
   setupPlayers() {
     this.playerContainers = [];
-    
+
     const positions = [
       { x: LAYOUT.CENTER_X, y: LAYOUT.BOTTOM_ZONE.y, id: "YOU", name: this.playerName },
-      { x: LAYOUT.CENTER_X, y: LAYOUT.TOP_ZONE.y, id: "BOT", name: "DEALER" }
+      { x: LAYOUT.CENTER_X, y: LAYOUT.TOP_ZONE.y, id: "BOT", name: "Dealer" }
     ];
 
     positions.forEach((pos, i) => {
       const container = this.add.container(pos.x, pos.y);
-      
+
+      // Active player glow ring (hidden initially)
+      const glowRing = this.add.ellipse(0, 0, 85, 85, 0x4a90d9, 0);
+
       const avatar = this.add.image(0, 0, "avatar")
         .setScale(SCALE.AVATAR)
         .setOrigin(0.5, 0.5);
-      
-      const nameText = this.add.text(0, 45, pos.name, {
-        fontFamily: "Arial",
-        fontSize: "14px",
-        color: "#ffffff",
-        stroke: "#000000",
-        strokeThickness: 3
+
+      const nameText = this.add.text(0, 48, pos.name, {
+        ...FONTS.BODY,
+        fontSize: "13px",
+        color: COLORS.TEXT_PRIMARY
       }).setOrigin(0.5);
 
-      const heartContainer = this.add.container(0, 70);
-      
-      container.add([avatar, nameText, heartContainer]);
-      this.playerContainers[i] = { container, heartContainer, avatar, id: pos.id, nameText };
+      const heartContainer = this.add.container(0, 72);
 
-      // Idle animation (subtle bobbing)
+      container.add([glowRing, avatar, nameText, heartContainer]);
+      this.playerContainers[i] = { container, heartContainer, avatar, glowRing, id: pos.id, nameText };
+
+      // Subtle idle breathing (reduced intensity)
       this.tweens.add({
         targets: container,
-        y: pos.y + (i === 0 ? 5 : -5), // Player bobs down, Bot bobs up
-        duration: 2000 + Math.random() * 1000,
+        y: pos.y + (i === 0 ? 3 : -3),
+        duration: 2500 + Math.random() * 500,
         yoyo: true,
         repeat: -1,
         ease: 'Sine.easeInOut'
       });
     });
   }
+
   setupGun() {
     this.gunSprite = this.add.image(LAYOUT.CENTER_X, LAYOUT.GUN_ZONE.y, "gun")
       .setScale(SCALE.GUN)
       .setOrigin(0.5, 0.5);
-    
+
     // Next ammo reveal sprite (for magnifying glass)
     this.nextAmmoSprite = this.add.image(LAYOUT.CENTER_X, LAYOUT.NEXT_AMMO_ZONE.y, "ammoUnknown")
       .setScale(SCALE.AMMO * 1.3)
       .setOrigin(0.5, 0.5)
       .setVisible(false);
-    
-    // Crossed revolvers container (for knife double damage - 2 cloned guns)
+
+    // Crossed revolvers container (for knife double damage)
     this.crossedRevolversContainer = this.add.container(LAYOUT.CENTER_X, LAYOUT.GUN_ZONE.y);
-    
-    // Left gun - rotated and positioned
+
     this.gunLeft = this.add.image(-25, 0, "gun")
       .setScale(SCALE.GUN * 0.85)
       .setOrigin(0.5, 0.5)
       .setAngle(-35)
-      .setFlipX(true);  // Mirror horizontally
-    
-    // Right gun - rotated opposite direction
+      .setFlipX(true);
+
     this.gunRight = this.add.image(25, 0, "gun")
       .setScale(SCALE.GUN * 0.85)
       .setOrigin(0.5, 0.5)
       .setAngle(35);
-    
+
     this.crossedRevolversContainer.add([this.gunLeft, this.gunRight]);
     this.crossedRevolversContainer.setVisible(false);
   }
@@ -223,42 +307,46 @@ export class GameScene extends Phaser.Scene {
     // Ammo container
     this.ammoContainer = this.add.container(LAYOUT.CENTER_X, LAYOUT.AMMO_ZONE.y);
 
-    // Buttons
-    const btnSpacing = 90;
-    
-    this.btnShootBot = this.add.image(LAYOUT.CENTER_X - btnSpacing, LAYOUT.BTN_ZONE.y, "btnShootPlayer")
-      .setScale(SCALE.BUTTON)
+    // Buttons - Asymmetric layout
+    const btnOffsetPrimary = 85;
+    const btnOffsetSecondary = 95;
+
+    // Shoot Dealer (Primary - Dominant)
+    this.btnShootBot = this.add.image(LAYOUT.CENTER_X - btnOffsetPrimary, LAYOUT.BTN_ZONE.y - 5, "btnShootPlayer")
+      .setScale(SCALE.BUTTON_PRIMARY)
       .setOrigin(0.5, 0.5);
-    this.setupButtonFeedback(this.btnShootBot, () => this.onPlayerAction({ type: "SHOOT_PLAYER", playerId: "YOU", targetId: "BOT" }));
-    
-    this.btnShootSelf = this.add.image(LAYOUT.CENTER_X + btnSpacing, LAYOUT.BTN_ZONE.y, "btnShootSelf")
-      .setScale(SCALE.BUTTON)
+
+    // Label for Shoot Dealer
+    this.add.text(LAYOUT.CENTER_X - btnOffsetPrimary, LAYOUT.BTN_ZONE.y + 35, "Shoot Dealer", {
+      ...FONTS.SMALL,
+      fontSize: "10px",
+      color: COLORS.TEXT_SECONDARY
+    }).setOrigin(0.5);
+
+    this.setupButtonFeedback(this.btnShootBot, SCALE.BUTTON_PRIMARY, () =>
+      this.onPlayerAction({ type: "SHOOT_PLAYER", playerId: "YOU", targetId: "BOT" }));
+
+    // Shoot Self (Secondary - Dangerous)
+    this.btnShootSelf = this.add.image(LAYOUT.CENTER_X + btnOffsetSecondary, LAYOUT.BTN_ZONE.y + 5, "btnShootSelf")
+      .setScale(SCALE.BUTTON_SECONDARY)
       .setOrigin(0.5, 0.5);
-    this.setupButtonFeedback(this.btnShootSelf, () => this.onPlayerAction({ type: "SHOOT_SELF", playerId: "YOU" }));
+
+    // Label for Shoot Self
+    this.add.text(LAYOUT.CENTER_X + btnOffsetSecondary, LAYOUT.BTN_ZONE.y + 40, "Shoot Self", {
+      ...FONTS.SMALL,
+      fontSize: "10px",
+      color: COLORS.TEXT_MUTED
+    }).setOrigin(0.5);
+
+    this.setupButtonFeedback(this.btnShootSelf, SCALE.BUTTON_SECONDARY, () =>
+      this.onPlayerAction({ type: "SHOOT_SELF", playerId: "YOU" }));
 
     // Item containers
     this.playerItemsContainer = this.add.container(LAYOUT.CENTER_X, LAYOUT.PLAYER_ITEMS_ZONE.y);
     this.botItemsContainer = this.add.container(LAYOUT.CENTER_X, LAYOUT.BOT_ITEMS_ZONE.y);
-    
+
     // Action indicator
     this.actionIndicator = this.add.container(LAYOUT.CENTER_X, LAYOUT.HEIGHT / 2);
-
-    // HUD - Round & Turn
-    this.hudRound = this.add.text(10, 10, "ROUND: 1", {
-      fontFamily: "Arial",
-      fontSize: "16px",
-      color: "#ffff00",
-      stroke: "#000000",
-      strokeThickness: 3
-    });
-
-    this.hudTurn = this.add.text(LAYOUT.WIDTH - 10, 10, "TURN: YOU", {
-      fontFamily: "Arial",
-      fontSize: "16px",
-      color: "#ffffff",
-      stroke: "#000000",
-      strokeThickness: 3
-    }).setOrigin(1, 0);
   }
 
   // ==========================================================================
@@ -275,59 +363,92 @@ export class GameScene extends Phaser.Scene {
     this.nextAmmoSprite.setVisible(false);
     this.gunSprite.setAngle(0);
     this.crossedRevolversContainer.setAngle(0);
-    
+
     console.log(`[STATE] New Round Started. Chamber: ${this.roundStartLive} Live, ${this.roundStartBlank} Blank`);
-    
+
     // Play spin sound
     this.sound.play("sndSpin");
-    
+
+    // Show loading text during reveal
+    this.revealLabel = this.add.text(LAYOUT.CENTER_X, LAYOUT.AMMO_ZONE.y - 35, "Loading chamber...", {
+      ...FONTS.SMALL,
+      color: COLORS.TEXT_MUTED
+    }).setOrigin(0.5).setAlpha(0);
+
+    this.tweens.add({
+      targets: this.revealLabel,
+      alpha: 0.8,
+      duration: 300
+    });
+
     this.render();
-    
+
     // Disable all actions for 3 seconds
     this.time.delayedCall(3000, () => {
+      // Fade out reveal label
+      this.tweens.add({
+        targets: this.revealLabel,
+        alpha: 0,
+        duration: 300,
+        onComplete: () => this.revealLabel.destroy()
+      });
+
       // Soft exit for reveal phase
       this.tweens.add({
         targets: this.ammoContainer,
         alpha: 0,
-        duration: 500,
+        duration: 400,
         onComplete: () => {
           this.ammoRevealPhase = false;
           this.render();
-          this.ammoContainer.setAlpha(1); // Reset for normal play
+          this.ammoContainer.setAlpha(1);
           this.checkAITurn();
         }
       });
     });
   }
 
-  // Start new round with 3s timeout
+  // Start new round with timeout
   startRoundTimeout() {
     this.betweenRounds = true;
     this.render();
-    
-    // Play reload sound
+
     this.sound.play("sndReload");
-    
-    // Show reload message
-    const reloadText = this.add.text(LAYOUT.CENTER_X, LAYOUT.HEIGHT / 2, "🔄 RELOADING...", {
-      fontSize: "24px",
-      fontFamily: "Arial",
-      color: "#ffff00",
-      stroke: "#000000",
-      strokeThickness: 4
-    }).setOrigin(0.5, 0.5);
-    
+
+    // Styled reload message
+    const reloadContainer = this.add.container(LAYOUT.CENTER_X, LAYOUT.HEIGHT / 2);
+    const reloadBg = this.add.rectangle(0, 0, 160, 50, COLORS.PANEL_BG, 0.9)
+      .setStrokeStyle(1, COLORS.PANEL_BORDER);
+    const reloadText = this.add.text(0, 0, "Reloading...", {
+      ...FONTS.LABEL,
+      color: COLORS.WARNING
+    }).setOrigin(0.5);
+    reloadContainer.add([reloadBg, reloadText]);
+
+    this.tweens.add({
+      targets: reloadContainer,
+      alpha: { from: 0, to: 1 },
+      scale: { from: 0.9, to: 1 },
+      duration: 200,
+      ease: 'Back.easeOut'
+    });
+
     this.tweens.add({
       targets: reloadText,
-      alpha: { from: 1, to: 0.5 },
-      scale: { from: 1, to: 1.1 },
-      duration: 500,
+      alpha: { from: 1, to: 0.6 },
+      duration: 400,
       yoyo: true,
-      repeat: 2
+      repeat: 3
     });
-    
+
     this.time.delayedCall(3000, () => {
-      reloadText.destroy();
+      this.tweens.add({
+        targets: reloadContainer,
+        alpha: 0,
+        scale: 0.9,
+        duration: 200,
+        onComplete: () => reloadContainer.destroy()
+      });
       this.betweenRounds = false;
       this.startAmmoReveal();
     });
@@ -335,16 +456,16 @@ export class GameScene extends Phaser.Scene {
 
   renderAmmo() {
     this.ammoContainer.removeAll(true);
-    
+
     const totalSlots = this.roundStartTotal;
     const fired = this.firedShots.length;
-    
+
     const ammoSpacing = 28;
     const startX = -((totalSlots - 1) * ammoSpacing) / 2;
-    
+
     for (let i = 0; i < totalSlots; i++) {
       let ammoKey;
-      
+
       if (i < fired) {
         ammoKey = this.firedShots[i].wasLive ? "ammoFilled" : "ammoEmpty";
       } else if (this.ammoRevealPhase) {
@@ -352,7 +473,7 @@ export class GameScene extends Phaser.Scene {
         const firedLive = this.firedShots.filter(s => s.wasLive).length;
         const remainingLive = liveCount - firedLive;
         const remainingSlotIndex = i - fired;
-        
+
         if (remainingSlotIndex < remainingLive) {
           ammoKey = "ammoFilled";
         } else {
@@ -361,19 +482,24 @@ export class GameScene extends Phaser.Scene {
       } else {
         ammoKey = "ammoUnknown";
       }
-      
+
       const ammo = this.add.image(startX + i * ammoSpacing, 0, ammoKey)
         .setScale(SCALE.AMMO)
         .setOrigin(0.5, 0.5);
-      
+
+      // Fired shells have reduced opacity
+      if (i < fired) {
+        ammo.setAlpha(0.4);
+      }
+
       if (this.ammoRevealPhase && i >= fired) {
         ammo.setAlpha(0);
         this.tweens.add({
           targets: ammo,
           alpha: 1,
-          scale: SCALE.AMMO * 1.2,
-          duration: 300,
-          delay: (i - fired) * 150,
+          scale: SCALE.AMMO * 1.15,
+          duration: 250,
+          delay: (i - fired) * 120,
           ease: 'Back.easeOut',
           onComplete: () => {
             this.tweens.add({
@@ -381,14 +507,10 @@ export class GameScene extends Phaser.Scene {
               scale: SCALE.AMMO,
               duration: 100
             });
-            // Flash on "lock-in" of the last ammo revealed
-            if (i === totalSlots - 1) {
-               this.triggerEffect("flash", { color: 0xffffff, alpha: 0.2, duration: 200 });
-            }
           }
         });
       }
-      
+
       this.ammoContainer.add(ammo);
     }
   }
@@ -398,18 +520,17 @@ export class GameScene extends Phaser.Scene {
   // ==========================================================================
   triggerEffect(type, params) {
     if (type === "shake") {
-      // Prevent screen shake overload
       if (this.isShaking) return;
       this.isShaking = true;
-      this.cameras.main.shake(params.duration || 150, params.intensity || 0.008);
-      this.time.delayedCall(params.duration || 150, () => this.isShaking = false);
+      this.cameras.main.shake(params.duration || 120, params.intensity || 0.006);
+      this.time.delayedCall(params.duration || 120, () => this.isShaking = false);
     } else if (type === "flash") {
-      const flash = this.add.rectangle(LAYOUT.CENTER_X, LAYOUT.HEIGHT / 2, LAYOUT.WIDTH, LAYOUT.HEIGHT, params.color || 0xffffff, params.alpha || 0.5)
+      const flash = this.add.rectangle(LAYOUT.CENTER_X, LAYOUT.HEIGHT / 2, LAYOUT.WIDTH, LAYOUT.HEIGHT, params.color || 0xffffff, params.alpha || 0.4)
         .setDepth(1000);
       this.tweens.add({
         targets: flash,
         alpha: 0,
-        duration: params.duration || 300,
+        duration: params.duration || 250,
         onComplete: () => flash.destroy()
       });
     }
@@ -420,43 +541,43 @@ export class GameScene extends Phaser.Scene {
   // ==========================================================================
   showActionIndicator(actorId, actionType, itemKey = null) {
     this.actionIndicator.removeAll(true);
-    
+
     const isBot = actorId === "BOT";
-    const y = isBot ? -180 : 180;
-    
+    const y = isBot ? -170 : 170;
+
     let iconKey = null;
     let color = 0xffffff;
-    
+
     if (actionType === "USE_ITEM" && itemKey) {
       iconKey = ITEM_ASSET_MAP[itemKey];
       color = this.getItemColor(itemKey);
     } else if (actionType === "SHOOT_PLAYER") {
-      color = 0xff4444;
+      color = 0xc62828;
     } else if (actionType === "SHOOT_SELF") {
-      color = 0x44aaff;
+      color = 0x4a90d9;
     }
-    
-    const bg = this.add.circle(0, y, 35, color, 0.3);
+
+    const bg = this.add.circle(0, y, 30, color, 0.25);
     this.actionIndicator.add(bg);
-    
+
     if (iconKey) {
       const icon = this.add.image(0, y, iconKey)
-        .setScale(SCALE.ITEM * 2)
+        .setScale(SCALE.ITEM * 1.8)
         .setOrigin(0.5, 0.5);
       this.actionIndicator.add(icon);
-      
+
       this.tweens.add({
         targets: [bg, icon],
-        scale: { from: 0.5, to: 1.2 },
-        duration: 200,
+        scale: { from: 0.5, to: 1.1 },
+        duration: 180,
         ease: 'Back.easeOut',
         yoyo: true,
-        hold: 400,
+        hold: 350,
         onComplete: () => {
           this.tweens.add({
             targets: [bg, icon],
             alpha: 0,
-            duration: 200,
+            duration: 180,
             onComplete: () => this.actionIndicator.removeAll(true)
           });
         }
@@ -464,9 +585,9 @@ export class GameScene extends Phaser.Scene {
     } else {
       this.tweens.add({
         targets: bg,
-        scale: { from: 0.3, to: 1.5 },
-        alpha: { from: 0.6, to: 0 },
-        duration: 400,
+        scale: { from: 0.3, to: 1.4 },
+        alpha: { from: 0.5, to: 0 },
+        duration: 350,
         onComplete: () => this.actionIndicator.removeAll(true)
       });
     }
@@ -474,11 +595,11 @@ export class GameScene extends Phaser.Scene {
 
   getItemColor(itemKey) {
     const colors = {
-      [ITEM_KEYS.KNIFE]: 0xff6666,
-      [ITEM_KEYS.MAGNIFYING_GLASS]: 0x66ddff,
-      [ITEM_KEYS.HANDCUFFS]: 0xaaaaaa,
-      [ITEM_KEYS.BEER]: 0xffcc44,
-      [ITEM_KEYS.CIGARETTE]: 0x88ff88
+      [ITEM_KEYS.KNIFE]: 0xc62828,
+      [ITEM_KEYS.MAGNIFYING_GLASS]: 0x4a90d9,
+      [ITEM_KEYS.HANDCUFFS]: 0x888888,
+      [ITEM_KEYS.BEER]: 0xf9a825,
+      [ITEM_KEYS.CIGARETTE]: 0x43a047
     };
     return colors[itemKey] || 0xffffff;
   }
@@ -488,19 +609,19 @@ export class GameScene extends Phaser.Scene {
   // ==========================================================================
   onPlayerAction(action) {
     if (this.state.gameOver || this.ammoRevealPhase || this.betweenRounds) return;
-    
+
     const isPlayerTurn = this.state.players[this.state.currentTurnIndex].id === "YOU";
     if (!isPlayerTurn) return;
-    
+
     this.executeAction(action, "YOU");
   }
 
   onItemAction(item) {
     if (this.state.gameOver || this.ammoRevealPhase || this.betweenRounds) return;
-    
+
     const isPlayerTurn = this.state.players[this.state.currentTurnIndex].id === "YOU";
     if (!isPlayerTurn) return;
-    
+
     this.executeAction({ type: "USE_ITEM", item: item }, "YOU");
   }
 
@@ -508,25 +629,23 @@ export class GameScene extends Phaser.Scene {
     const chamber = this.state.shotgun.chamber;
     const prevChamberLength = chamber.length;
     const prevHealth = this.state.players.map(p => p.health);
-    
-    // Determine wasLive BEFORE applying action
-    // This is because applyAction might refill the chamber, resetting live/blank counts
+
     let wasLive = false;
     const isShot = action.type.startsWith("SHOOT");
     const isBeer = action.type === "USE_ITEM" && action.item === ITEM_KEYS.BEER;
-    
+
     if ((isShot || isBeer) && prevChamberLength > 0) {
       wasLive = !!chamber[chamber.length - 1];
     }
 
     this.showActionIndicator(actorId, action.type, action.item);
-    
+
     // Gun rotation logic
-    let targetAngle = 0; // Default center
+    let targetAngle = 0;
     if (action.type === "SHOOT_PLAYER") {
-      targetAngle = (actorId === "YOU") ? -90 : 90; // YOU shoots BOT (Up), or BOT shoots YOU (Down)
+      targetAngle = (actorId === "YOU") ? -90 : 90;
     } else if (action.type === "SHOOT_SELF") {
-      targetAngle = (actorId === "YOU") ? 90 : -90; // YOU shoots YOU (Down), or BOT shoots BOT (Up)
+      targetAngle = (actorId === "YOU") ? 90 : -90;
     }
 
     if (isShot) {
@@ -534,11 +653,10 @@ export class GameScene extends Phaser.Scene {
       this.tweens.add({
         targets: [this.gunSprite, this.crossedRevolversContainer],
         angle: targetAngle,
-        duration: 300,
+        duration: 280,
         ease: 'Cubic.easeOut'
       });
-      // Wait for rotation before proceeding
-      this.time.delayedCall(400, () => {
+      this.time.delayedCall(350, () => {
         this.processAction(action, actorId, wasLive, prevChamberLength);
       });
     } else {
@@ -559,86 +677,83 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.state = applyAction(this.state, action, this.rng);
-    
+
     if (isShot) {
       this.firedShots.push({ wasLive });
-      
+
       console.log(`[RESULT] ${wasLive ? "💥 LIVE ROUND!" : "💨 BLANK ROUND"}`);
-      
-      // Clear magnifying glass reveal
+
       this.nextAmmoRevealed = null;
       this.nextAmmoSprite.setVisible(false);
-      
-      // Play sound and visual effect
+
       if (wasLive) {
         this.sound.play("sndGunshot");
       } else {
         this.sound.play("sndDryFire");
       }
       this.playShootEffect(wasLive, action);
-      
-      // Clear knife double damage visual after shot
+
       this.crossedRevolversContainer.setVisible(false);
       this.gunSprite.setVisible(true);
       this.gunSprite.clearTint();
-      
+
       this.state.players.forEach((p, i) => {
         if (p.health < prevHealth[i]) {
           this.playDamageEffect(i);
         }
       });
     }
-    
+
     if (action.type === "USE_ITEM") {
       this.playItemEffect(action.item, actorId);
-      
+
       if (isBeer && prevChamberLength > 0) {
         this.firedShots.push({ wasLive });
         this.playBeerEffect(wasLive);
       }
-      
+
       if (action.item === ITEM_KEYS.MAGNIFYING_GLASS) {
         this.revealNextAmmo();
       }
-      
+
       if (action.item === ITEM_KEYS.CIGARETTE) {
         const idx = actorId === "YOU" ? 0 : 1;
         this.playHealEffect(idx);
       }
-      
+
       if (action.item === ITEM_KEYS.HANDCUFFS) {
         const targetIdx = actorId === "YOU" ? 1 : 0;
         this.playHandcuffEffect(targetIdx);
       }
-      
+
       if (action.item === ITEM_KEYS.KNIFE) {
         this.playKnifeEffect();
       }
     }
-    
-    // Check if new round started (chamber refilled)
+
+    // Check if new round started
     if (this.state.shotgun.chamber.length > prevChamberLength) {
-      this.time.delayedCall(500, () => {
+      this.time.delayedCall(450, () => {
         this.startRoundTimeout();
       });
     }
-    
+
     this.render();
 
     if (action.type.startsWith("SHOOT")) {
       this.isProcessing = true;
-      this.time.delayedCall(800, () => {
+      this.time.delayedCall(700, () => {
         this.isProcessing = false;
         this.tweens.add({
           targets: [this.gunSprite, this.crossedRevolversContainer],
           angle: 0,
-          duration: 300,
+          duration: 280,
           ease: 'Cubic.easeOut'
         });
         this.checkAITurn();
       });
     } else {
-      this.time.delayedCall(100, () => {
+      this.time.delayedCall(80, () => {
         this.checkAITurn();
       });
     }
@@ -650,30 +765,30 @@ export class GameScene extends Phaser.Scene {
   revealNextAmmo() {
     const chamber = this.state.shotgun.chamber;
     if (chamber.length === 0) return;
-    
+
     const nextRound = chamber[chamber.length - 1];
     this.nextAmmoRevealed = nextRound;
-    
+
     const ammoKey = nextRound ? "ammoFilled" : "ammoEmpty";
     this.nextAmmoSprite.setTexture(ammoKey);
     this.nextAmmoSprite.setVisible(true);
     this.nextAmmoSprite.setAlpha(0);
     this.nextAmmoSprite.setScale(0.1);
-    
+
     this.tweens.add({
       targets: this.nextAmmoSprite,
       alpha: 1,
-      scale: SCALE.AMMO * 1.5,
-      duration: 300,
+      scale: SCALE.AMMO * 1.4,
+      duration: 280,
       ease: 'Back.easeOut'
     });
-    
-    const glow = this.add.circle(LAYOUT.CENTER_X, LAYOUT.NEXT_AMMO_ZONE.y, 25, nextRound ? 0xff4444 : 0x4488ff, 0.4);
+
+    const glow = this.add.circle(LAYOUT.CENTER_X, LAYOUT.NEXT_AMMO_ZONE.y, 22, nextRound ? 0xc62828 : 0x4a90d9, 0.35);
     this.tweens.add({
       targets: glow,
-      scale: { from: 0.5, to: 2 },
+      scale: { from: 0.5, to: 1.8 },
       alpha: 0,
-      duration: 500,
+      duration: 450,
       onComplete: () => glow.destroy()
     });
   }
@@ -682,92 +797,75 @@ export class GameScene extends Phaser.Scene {
   // GAME SYSTEMS: VISUAL EFFECTS
   // ==========================================================================
 
-  triggerEffect(type, params) {
-    if (type === "shake") {
-      if (this.isShaking) return;
-      this.isShaking = true;
-      this.cameras.main.shake(params.duration || 150, params.intensity || 0.008);
-      this.time.delayedCall(params.duration || 150, () => this.isShaking = false);
-    } else if (type === "flash") {
-      const flash = this.add.rectangle(LAYOUT.CENTER_X, LAYOUT.HEIGHT / 2, LAYOUT.WIDTH, LAYOUT.HEIGHT, params.color || 0xffffff, params.alpha || 0.5)
-        .setDepth(1000);
-      this.tweens.add({
-        targets: flash,
-        alpha: 0,
-        duration: params.duration || 300,
-        onComplete: () => flash.destroy()
-      });
-    }
-  }
-
   playShootEffect(wasLive, action) {
     if (wasLive) {
-      const flash = this.add.circle(LAYOUT.CENTER_X, LAYOUT.GUN_ZONE.y, 40, 0xffff00, 1);
+      const flash = this.add.circle(LAYOUT.CENTER_X, LAYOUT.GUN_ZONE.y, 35, 0xffcc00, 1);
       this.tweens.add({
         targets: flash,
-        scale: { from: 0.3, to: 1.5 },
+        scale: { from: 0.3, to: 1.4 },
         alpha: { from: 1, to: 0 },
-        duration: 200,
+        duration: 180,
         onComplete: () => flash.destroy()
       });
-      
-      this.triggerEffect("shake", { duration: 150, intensity: 0.008 });
-      
+
+      this.triggerEffect("shake", { duration: 120, intensity: 0.006 });
+
       this.tweens.add({
         targets: this.gunSprite,
-        angle: { from: -10, to: 0 },
-        duration: 200,
+        angle: { from: this.gunSprite.angle - 8, to: this.gunSprite.angle },
+        duration: 180,
         ease: 'Back.easeOut'
       });
-      
-      this.triggerEffect("flash", { color: 0xff0000, alpha: 0.25, duration: 300 });
+
+      this.triggerEffect("flash", { color: 0xc62828, alpha: 0.2, duration: 250 });
     } else {
-      const puff = this.add.circle(LAYOUT.CENTER_X, LAYOUT.GUN_ZONE.y - 15, 15, 0x4488ff, 0.6);
+      // Dry fire - softer effect
+      const puff = this.add.circle(LAYOUT.CENTER_X, LAYOUT.GUN_ZONE.y - 12, 12, 0x4a90d9, 0.5);
       this.tweens.add({
         targets: puff,
-        scale: { from: 0.5, to: 2 },
+        scale: { from: 0.5, to: 1.8 },
         alpha: 0,
-        y: LAYOUT.GUN_ZONE.y - 40,
-        duration: 350,
+        y: LAYOUT.GUN_ZONE.y - 35,
+        duration: 320,
         onComplete: () => puff.destroy()
       });
-      
+
+      // Subtle wobble
       this.tweens.add({
         targets: this.gunSprite,
-        angle: { from: -3, to: 3 },
-        duration: 80,
+        angle: { from: this.gunSprite.angle - 2, to: this.gunSprite.angle + 2 },
+        duration: 60,
         yoyo: true,
-        repeat: 2
+        repeat: 1
       });
     }
   }
 
   playDamageEffect(playerIndex) {
     const pc = this.playerContainers[playerIndex];
-    
-    pc.avatar.setTint(0xff0000);
-    this.time.delayedCall(150, () => {
+
+    pc.avatar.setTint(0xc62828);
+    this.time.delayedCall(130, () => {
       pc.avatar.clearTint();
     });
-    
+
     const hearts = pc.heartContainer.list;
     if (hearts.length > 0) {
-      // Find the heart that was most recently "emptied" (visual sync with state)
       const lastFullHeartIdx = hearts.findLastIndex(h => h.texture.key === "heartFull");
       const targetHeart = lastFullHeartIdx !== -1 ? hearts[lastFullHeartIdx] : null;
-      
+
       if (targetHeart) {
         this.tweens.add({
           targets: targetHeart,
-          y: targetHeart.y - 15,
-          scale: SCALE.HEART * 1.5,
+          y: targetHeart.y - 12,
+          scale: SCALE.HEART * 1.4,
           alpha: 0,
-          duration: 300,
+          duration: 280,
           ease: 'Back.easeIn',
           onComplete: () => {
             targetHeart.setTexture("heartEmpty");
             targetHeart.y = 0;
-            targetHeart.alpha = 0.5;
+            targetHeart.alpha = 0.4;
             targetHeart.setScale(SCALE.HEART);
           }
         });
@@ -778,64 +876,64 @@ export class GameScene extends Phaser.Scene {
   playItemEffect(itemKey, actorId) {
     const isBot = actorId === "BOT";
     const baseY = isBot ? LAYOUT.BOT_ITEMS_ZONE.y : LAYOUT.PLAYER_ITEMS_ZONE.y;
-    
+
     const color = this.getItemColor(itemKey);
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 5; i++) {
       const sparkle = this.add.circle(
-        LAYOUT.CENTER_X + Phaser.Math.Between(-40, 40),
-        baseY + Phaser.Math.Between(-20, 20),
-        5,
+        LAYOUT.CENTER_X + Phaser.Math.Between(-35, 35),
+        baseY + Phaser.Math.Between(-15, 15),
+        4,
         color,
-        1
+        0.8
       );
       this.tweens.add({
         targets: sparkle,
         scale: { from: 1, to: 0 },
-        y: sparkle.y - 30,
+        y: sparkle.y - 25,
         alpha: 0,
-        duration: 400,
-        delay: i * 50,
+        duration: 350,
+        delay: i * 40,
         onComplete: () => sparkle.destroy()
       });
     }
   }
 
   playBeerEffect(wasLive) {
-    const color = wasLive ? 0xff4444 : 0x4488ff;
-    const eject = this.add.circle(LAYOUT.CENTER_X + 30, LAYOUT.GUN_ZONE.y, 8, color, 1);
+    const color = wasLive ? 0xc62828 : 0x4a90d9;
+    const eject = this.add.circle(LAYOUT.CENTER_X + 28, LAYOUT.GUN_ZONE.y, 7, color, 0.9);
     this.tweens.add({
       targets: eject,
-      x: LAYOUT.CENTER_X + 100,
-      y: LAYOUT.GUN_ZONE.y + 50,
-      rotation: 3,
+      x: LAYOUT.CENTER_X + 90,
+      y: LAYOUT.GUN_ZONE.y + 45,
+      rotation: 2.5,
       alpha: 0,
-      duration: 500,
+      duration: 450,
       onComplete: () => eject.destroy()
     });
   }
 
   playHealEffect(playerIndex) {
     const pc = this.playerContainers[playerIndex];
-    
-    pc.avatar.setTint(0x44ff44);
-    this.time.delayedCall(300, () => {
+
+    pc.avatar.setTint(0x43a047);
+    this.time.delayedCall(280, () => {
       pc.avatar.clearTint();
     });
-    
-    for (let i = 0; i < 4; i++) {
+
+    for (let i = 0; i < 3; i++) {
       const plus = this.add.circle(
-        pc.container.x + Phaser.Math.Between(-20, 20),
-        pc.container.y - 20,
-        6,
-        0x44ff44,
-        0.8
+        pc.container.x + Phaser.Math.Between(-18, 18),
+        pc.container.y - 18,
+        5,
+        0x43a047,
+        0.7
       );
       this.tweens.add({
         targets: plus,
-        y: plus.y - 40,
+        y: plus.y - 35,
         alpha: 0,
-        duration: 600,
-        delay: i * 100,
+        duration: 550,
+        delay: i * 80,
         onComplete: () => plus.destroy()
       });
     }
@@ -843,57 +941,52 @@ export class GameScene extends Phaser.Scene {
 
   playHandcuffEffect(targetIndex) {
     const pc = this.playerContainers[targetIndex];
-    
+
     const chain = this.add.image(pc.container.x, pc.container.y, "itemHandcuffs")
-      .setScale(0.3)
+      .setScale(0.28)
       .setAlpha(0);
-    
+
     this.tweens.add({
       targets: chain,
       alpha: 1,
-      scale: 0.15,
-      duration: 300,
+      scale: 0.14,
+      duration: 280,
       yoyo: true,
-      hold: 300,
+      hold: 280,
       onComplete: () => chain.destroy()
     });
-    
-    pc.avatar.setTint(0x888888);
-    this.time.delayedCall(400, () => {
+
+    pc.avatar.setTint(0x666666);
+    this.time.delayedCall(380, () => {
       pc.avatar.clearTint();
     });
   }
 
   playKnifeEffect() {
-    // Show crossed revolvers (2 cloned guns) instead of just tinting
     this.crossedRevolversContainer.setVisible(true);
     this.crossedRevolversContainer.setAlpha(0);
     this.crossedRevolversContainer.setScale(0.3);
-    
-    // Hide normal gun
+
     this.gunSprite.setVisible(false);
-    
-    // Add red tint to both guns
-    this.gunLeft.setTint(0xff6666);
-    this.gunRight.setTint(0xff6666);
-    
-    // Animate crossed revolvers appearing
+
+    this.gunLeft.setTint(0xc62828);
+    this.gunRight.setTint(0xc62828);
+
     this.tweens.add({
       targets: this.crossedRevolversContainer,
       alpha: 1,
       scale: 1,
-      duration: 300,
+      duration: 280,
       ease: 'Back.easeOut'
     });
-    
-    // Slash effect
-    const slash = this.add.rectangle(LAYOUT.CENTER_X - 20, LAYOUT.GUN_ZONE.y, 60, 4, 0xff4444, 1)
+
+    const slash = this.add.rectangle(LAYOUT.CENTER_X - 18, LAYOUT.GUN_ZONE.y, 55, 3, 0xc62828, 1)
       .setAngle(-45);
     this.tweens.add({
       targets: slash,
-      x: LAYOUT.CENTER_X + 20,
+      x: LAYOUT.CENTER_X + 18,
       alpha: 0,
-      duration: 200,
+      duration: 180,
       onComplete: () => slash.destroy()
     });
   }
@@ -903,10 +996,10 @@ export class GameScene extends Phaser.Scene {
   // ==========================================================================
   checkAITurn() {
     if (this.state.gameOver || this.ammoRevealPhase || this.betweenRounds) return;
-    
+
     const actor = this.state.players[this.state.currentTurnIndex];
     this.updateButtonStates();
-    
+
     // Reset knife visuals if damage is back to 1
     if (this.state.shotgun.damage === 1) {
       this.crossedRevolversContainer.setVisible(false);
@@ -917,19 +1010,18 @@ export class GameScene extends Phaser.Scene {
     if (actor.id === "BOT") {
       this.isProcessing = true;
       this.updateButtonStates();
-      
-      // Show "thinking" indicator
+
       this.showThinkingIndicator(true);
-      
-      this.time.delayedCall(1200 + Math.random() * 800, () => {
+
+      this.time.delayedCall(1100 + Math.random() * 700, () => {
         if (this.ammoRevealPhase || this.betweenRounds) {
           this.showThinkingIndicator(false);
           return;
         }
-        
+
         const aiAction = decideAIAction(this.state, this.rng);
         this.showThinkingIndicator(false);
-        
+
         if (aiAction) {
           this.executeAction(aiAction, "BOT");
         } else {
@@ -945,9 +1037,9 @@ export class GameScene extends Phaser.Scene {
     if (show) {
       this.tweens.add({
         targets: pc.avatar,
-        scale: SCALE.AVATAR * 1.1,
-        alpha: 0.8,
-        duration: 400,
+        scale: SCALE.AVATAR * 1.08,
+        alpha: 0.85,
+        duration: 350,
         yoyo: true,
         repeat: -1
       });
@@ -958,30 +1050,30 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  setupButtonFeedback(button, callback) {
+  setupButtonFeedback(button, baseScale, callback) {
     button.setInteractive({ useHandCursor: true });
-    
+
     button.on("pointerdown", () => {
       this.tweens.add({
         targets: button,
-        scale: SCALE.BUTTON * 0.9,
-        duration: 80,
+        scale: baseScale * 0.88,
+        duration: 70,
         ease: 'Cubic.easeOut'
       });
       callback();
     });
-    
+
     button.on("pointerup", () => {
       this.tweens.add({
         targets: button,
-        scale: SCALE.BUTTON * 1.1,
-        duration: 120,
+        scale: baseScale * 1.08,
+        duration: 100,
         ease: 'Back.easeOut',
         onComplete: () => {
           this.tweens.add({
             targets: button,
-            scale: SCALE.BUTTON,
-            duration: 150
+            scale: baseScale,
+            duration: 130
           });
         }
       });
@@ -990,8 +1082,8 @@ export class GameScene extends Phaser.Scene {
     button.on("pointerout", () => {
       this.tweens.add({
         targets: button,
-        scale: SCALE.BUTTON,
-        duration: 150
+        scale: baseScale,
+        duration: 130
       });
     });
   }
@@ -1003,19 +1095,24 @@ export class GameScene extends Phaser.Scene {
   updateButtonStates() {
     const isPlayerTurn = this.state.players[this.state.currentTurnIndex].id === "YOU";
     const canAct = isPlayerTurn && !this.isProcessing && !this.state.gameOver && !this.ammoRevealPhase && !this.betweenRounds;
-    
+
     if (canAct) {
       this.btnShootBot.setInteractive({ useHandCursor: true });
       this.btnShootSelf.setInteractive({ useHandCursor: true });
       this.btnShootBot.clearTint();
       this.btnShootSelf.clearTint();
+      this.btnShootBot.setAlpha(1);
+      this.btnShootSelf.setAlpha(0.9);
     } else {
       this.btnShootBot.disableInteractive();
       this.btnShootSelf.disableInteractive();
-      this.btnShootBot.setTint(TINT_DISABLED);
-      this.btnShootSelf.setTint(TINT_DISABLED);
+      this.btnShootBot.setTint(COLORS.TINT_DISABLED);
+      this.btnShootSelf.setTint(COLORS.TINT_DISABLED);
+      this.btnShootBot.setAlpha(0.35);
+      this.btnShootSelf.setAlpha(0.3);
     }
   }
+
   render() {
     const players = this.state.players;
     const currentTurnIdx = this.state.currentTurnIndex;
@@ -1023,7 +1120,7 @@ export class GameScene extends Phaser.Scene {
     players.forEach((player, i) => {
       const pc = this.playerContainers[i];
       const isCurrentTurn = i === currentTurnIdx;
-      
+
       let textureKey = "avatar";
       if (!player.alive) {
         textureKey = "avatarDead";
@@ -1031,18 +1128,38 @@ export class GameScene extends Phaser.Scene {
         textureKey = "avatarActive";
       }
       pc.avatar.setTexture(textureKey);
-      pc.avatar.setAlpha(player.alive ? 1 : 0.4);
-      
-      // Apply desaturation/dimming for inactive players
-      if (!isCurrentTurn && player.alive) {
-        pc.avatar.setAlpha(0.6);
+
+      // Turn emphasis system
+      if (isCurrentTurn && player.alive) {
+        pc.avatar.setAlpha(1);
+        pc.avatar.setScale(SCALE.AVATAR * 1.12);
+        // Show glow ring
+        pc.glowRing.setFillStyle(0x4a90d9, 0.15);
+        this.tweens.add({
+          targets: pc.glowRing,
+          alpha: { from: 0.5, to: 0.2 },
+          scale: { from: 1, to: 1.1 },
+          duration: 800,
+          yoyo: true,
+          repeat: -1
+        });
+      } else if (player.alive) {
+        pc.avatar.setAlpha(0.55);
+        pc.avatar.setScale(SCALE.AVATAR * 0.95);
+        this.tweens.killTweensOf(pc.glowRing);
+        pc.glowRing.setAlpha(0);
+      } else {
+        pc.avatar.setAlpha(0.35);
+        pc.avatar.setScale(SCALE.AVATAR);
+        this.tweens.killTweensOf(pc.glowRing);
+        pc.glowRing.setAlpha(0);
       }
-      
-      // Efficient heart rendering
+
+      // Heart rendering
       const maxHealth = 4;
       const heartSpacing = 20;
       const startX = -((maxHealth - 1) * heartSpacing) / 2;
-      
+
       if (pc.heartContainer.list.length === 0) {
         for (let h = 0; h < maxHealth; h++) {
           const heart = this.add.image(startX + h * heartSpacing, 0, "heartEmpty")
@@ -1055,86 +1172,158 @@ export class GameScene extends Phaser.Scene {
       pc.heartContainer.list.forEach((heart, h) => {
         const isFull = h < player.health;
         const targetTexture = isFull ? "heartFull" : "heartEmpty";
-        
-        // Only change texture if needed to avoid flickering/resource waste
+
         if (heart.texture.key !== targetTexture) {
           heart.setTexture(targetTexture);
         }
-        
-        // Visual weight: Dim inactive player hearts
-        heart.setAlpha(isCurrentTurn ? (isFull ? 1 : 0.4) : (isFull ? 0.5 : 0.2));
+
+        // Visual weight based on turn
+        heart.setAlpha(isCurrentTurn ? (isFull ? 1 : 0.35) : (isFull ? 0.5 : 0.18));
       });
     });
 
-    // Update HUD
-    if (this.hudRound) this.hudRound.setText(`ROUND: ${this.state.roundNumber}`);
+    // Update HUD with animation on changes
+    if (this.hudRound) {
+      const newRoundText = `Round ${this.state.roundNumber}`;
+      if (this.hudRound.text !== newRoundText) {
+        this.tweens.add({
+          targets: this.hudRound,
+          scale: { from: 1, to: 1.15 },
+          duration: 150,
+          yoyo: true,
+          onStart: () => this.hudRound.setText(newRoundText)
+        });
+      }
+    }
+
     if (this.hudTurn) {
       const currentActor = players[currentTurnIdx];
-      const turnName = currentActor.id === "YOU" ? this.playerName : "DEALER";
-      this.hudTurn.setText(`TURN: ${turnName}`);
-      this.hudTurn.setColor(currentActor.id === "YOU" ? "#00ff00" : "#ff4444");
+      const turnName = currentActor.id === "YOU" ? "Your Turn" : "Dealer's Turn";
+      const turnColor = currentActor.id === "YOU" ? COLORS.SUCCESS : COLORS.DANGER;
+
+      if (this.hudTurn.text !== turnName) {
+        this.tweens.add({
+          targets: [this.hudTurn, this.turnBg],
+          alpha: { from: 1, to: 0 },
+          duration: 120,
+          onComplete: () => {
+            this.hudTurn.setText(turnName);
+            this.hudTurn.setColor(turnColor);
+            this.turnBg.setStrokeStyle(1, currentActor.id === "YOU" ? 0x43a047 : 0xc62828);
+            this.tweens.add({
+              targets: [this.hudTurn, this.turnBg],
+              alpha: { from: 0, to: 1 },
+              duration: 120
+            });
+          }
+        });
+
+        // Turn glow pulse
+        this.turnGlow.setStrokeStyle(2, currentActor.id === "YOU" ? 0x43a047 : 0xc62828);
+        this.tweens.add({
+          targets: this.turnGlow,
+          alpha: { from: 0, to: 0.6 },
+          duration: 300,
+          yoyo: true
+        });
+      }
     }
 
     this.renderAmmo();
     this.updateButtonStates();
 
-    // Player items - only interactive if not in reveal/timeout phase
+    // Items rendering
     const canUseItems = !this.ammoRevealPhase && !this.betweenRounds;
     this.playerItemsContainer.removeAll(true);
-    this.renderItems(this.playerItemsContainer, players[0].items, canUseItems);
-    
+    this.renderItems(this.playerItemsContainer, players[0].items, canUseItems, false);
+
     this.botItemsContainer.removeAll(true);
-    this.renderItems(this.botItemsContainer, players[1].items, false);
+    this.renderItems(this.botItemsContainer, players[1].items, false, true);
 
     if (this.state.gameOver && !this.restartBtn) {
       const winner = players.find(p => p.alive);
       const isWin = winner?.id === "YOU";
-      const color = isWin ? 0x44ff44 : 0xff4444;
-      
-      console.log(`[STATE] Game Over. Winner: ${winner?.id || "None"}`);
-      
-      const overlay = this.add.rectangle(LAYOUT.CENTER_X, LAYOUT.HEIGHT / 2, LAYOUT.WIDTH, LAYOUT.HEIGHT, 0x000000, 0.8)
-        .setDepth(100);
-      
-      const title = this.add.text(LAYOUT.CENTER_X, LAYOUT.HEIGHT / 2 - 80, isWin ? "VICTORY" : "GAME OVER", {
-        fontFamily: "Arial",
-        fontSize: "48px",
-        fontWeight: "bold",
-        color: isWin ? "#44ff44" : "#ff0000",
-        stroke: "#000000",
-        strokeThickness: 6
-      }).setOrigin(0.5).setDepth(101);
 
-      const msg = this.add.text(LAYOUT.CENTER_X, LAYOUT.HEIGHT / 2 - 20, isWin ? `You defeated the Dealer!` : `The Dealer got you...`, {
-        fontFamily: "Arial",
-        fontSize: "18px",
-        color: "#ffffff"
-      }).setOrigin(0.5).setDepth(101);
-      
-      this.restartBtn = this.add.container(LAYOUT.CENTER_X, LAYOUT.HEIGHT / 2 + 80).setDepth(101);
-      
-      const btnBg = this.add.rectangle(0, 0, 180, 50, color, 1)
-        .setInteractive({ useHandCursor: true });
-      
-      const btnText = this.add.text(0, 0, "REPLAY", {
-        fontFamily: "Arial",
-        fontSize: "24px",
-        fontWeight: "bold",
-        color: "#ffffff"
-      }).setOrigin(0.5);
-      
-      this.restartBtn.add([btnBg, btnText]);
-      
-      btnBg.on("pointerdown", () => {
-        this.scene.start("StartScene");
+      console.log(`[STATE] Game Over. Winner: ${winner?.id || "None"}`);
+
+      // Polished overlay
+      const overlay = this.add.rectangle(LAYOUT.CENTER_X, LAYOUT.HEIGHT / 2, LAYOUT.WIDTH, LAYOUT.HEIGHT, 0x000000, 0)
+        .setDepth(100);
+
+      this.tweens.add({
+        targets: overlay,
+        fillAlpha: 0.85,
+        duration: 400
       });
-      
+
+      const title = this.add.text(LAYOUT.CENTER_X, LAYOUT.HEIGHT / 2 - 75, isWin ? "Victory" : "Game Over", {
+        ...FONTS.HEADLINE,
+        fontSize: "40px",
+        color: isWin ? COLORS.SUCCESS : COLORS.DANGER
+      }).setOrigin(0.5).setDepth(101).setAlpha(0);
+
+      this.tweens.add({
+        targets: title,
+        alpha: 1,
+        y: LAYOUT.HEIGHT / 2 - 85,
+        duration: 400,
+        delay: 200,
+        ease: 'Back.easeOut'
+      });
+
+      const msg = this.add.text(LAYOUT.CENTER_X, LAYOUT.HEIGHT / 2 - 25,
+        isWin ? "You defeated the Dealer!" : "The Dealer got you...", {
+        ...FONTS.BODY,
+        color: COLORS.TEXT_SECONDARY
+      }).setOrigin(0.5).setDepth(101).setAlpha(0);
+
+      this.tweens.add({
+        targets: msg,
+        alpha: 1,
+        duration: 300,
+        delay: 400
+      });
+
+      this.restartBtn = this.add.container(LAYOUT.CENTER_X, LAYOUT.HEIGHT / 2 + 70).setDepth(101).setAlpha(0);
+
+      const btnColor = isWin ? 0x43a047 : 0xc62828;
+      const btnBg = this.add.rectangle(0, 0, 160, 46, btnColor, 1)
+        .setInteractive({ useHandCursor: true });
+
+      const btnText = this.add.text(0, 0, "Play Again", {
+        ...FONTS.LABEL,
+        fontSize: "16px"
+      }).setOrigin(0.5);
+
+      this.restartBtn.add([btnBg, btnText]);
+
       this.tweens.add({
         targets: this.restartBtn,
-        scale: { from: 0.95, to: 1.05 },
-        duration: 400,
-        yoyo: true,
-        repeat: -1
+        alpha: 1,
+        y: LAYOUT.HEIGHT / 2 + 60,
+        duration: 300,
+        delay: 500,
+        ease: 'Back.easeOut'
+      });
+
+      btnBg.on("pointerover", () => {
+        this.tweens.add({
+          targets: this.restartBtn,
+          scale: 1.05,
+          duration: 120
+        });
+      });
+
+      btnBg.on("pointerout", () => {
+        this.tweens.add({
+          targets: this.restartBtn,
+          scale: 1,
+          duration: 120
+        });
+      });
+
+      btnBg.on("pointerdown", () => {
+        this.scene.start("StartScene");
       });
     }
   }
@@ -1142,35 +1331,58 @@ export class GameScene extends Phaser.Scene {
   // ==========================================================================
   // RENDER ITEMS
   // ==========================================================================
-  renderItems(container, items, isInteractive) {
-    const itemSpacing = 40;
+  renderItems(container, items, isInteractive, isDealer) {
+    const itemSpacing = 36;
     const startX = -((Math.min(items.length, 6) - 1) * itemSpacing) / 2;
-    
+
     items.forEach((item, i) => {
       const col = i % 6;
       const row = Math.floor(i / 6);
       const tx = startX + col * itemSpacing;
-      const ty = row * 35;
-      
+      const ty = row * 32;
+
       const assetKey = ITEM_ASSET_MAP[item];
       if (!assetKey) return;
-      
+
       const icon = this.add.image(tx, ty, assetKey)
         .setScale(SCALE.ITEM)
         .setOrigin(0.5, 0.5);
-      
-      // Gray out items during reveal/timeout phases
-      if (this.ammoRevealPhase || this.betweenRounds) {
-        icon.setTint(TINT_DISABLED);
+
+      // Dealer items de-emphasized
+      if (isDealer) {
+        icon.setAlpha(0.5);
+        icon.setTint(0xaaaaaa);
       }
-      
+
+      // Disabled during reveal/timeout phases
+      if (this.ammoRevealPhase || this.betweenRounds) {
+        icon.setTint(COLORS.TINT_DISABLED);
+        icon.setAlpha(0.4);
+      }
+
       if (isInteractive && !this.ammoRevealPhase && !this.betweenRounds) {
         icon.setInteractive({ useHandCursor: true });
-        icon.on("pointerover", () => icon.setScale(SCALE.ITEM * 1.25));
-        icon.on("pointerout", () => icon.setScale(SCALE.ITEM));
+
+        // Subtle hover effect (scale + slight glow)
+        icon.on("pointerover", () => {
+          this.tweens.add({
+            targets: icon,
+            scale: SCALE.ITEM * 1.12,
+            duration: 100
+          });
+        });
+
+        icon.on("pointerout", () => {
+          this.tweens.add({
+            targets: icon,
+            scale: SCALE.ITEM,
+            duration: 100
+          });
+        });
+
         icon.on("pointerdown", () => this.onItemAction(item));
       }
-      
+
       container.add(icon);
     });
   }
