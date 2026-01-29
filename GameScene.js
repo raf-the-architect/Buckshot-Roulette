@@ -1194,7 +1194,7 @@ export class GameScene extends Phaser.Scene {
       });
 
       btnBg.on("pointerdown", () => {
-        this.scene.start("StartScene");
+        this.scene.restart({ playerName: this.playerName });
       });
     }
   }
