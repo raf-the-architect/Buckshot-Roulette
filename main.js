@@ -1,6 +1,7 @@
 
 import { GameScene } from "./GameScene.js";
 import { StartScreen } from "./ui.js";
+import { GameOverScreen } from "./gameOverScreen.js";
 
 // Initialize UI
 new StartScreen((playerName) => {
@@ -20,6 +21,11 @@ function launchGame(playerName) {
 
   const game = new Phaser.Game(config);
 
+  // Create game over screen instance
+  const gameOverScreen = new GameOverScreen();
+
   // Pass data to the first scene
+  game.registry.set('gameOverScreen', gameOverScreen);
+  game.registry.set('playerName', playerName);
   game.scene.start("Game", { playerName: playerName });
 }

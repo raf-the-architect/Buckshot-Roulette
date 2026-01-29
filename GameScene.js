@@ -1117,85 +1117,35 @@ export class GameScene extends Phaser.Scene {
 
       console.log(`[STATE] Game Over. Winner: ${winner?.id || "None"}`);
 
-      // Polished overlay
-      const overlay = this.add.rectangle(LAYOUT.CENTER_X, LAYOUT.HEIGHT / 2, LAYOUT.WIDTH, LAYOUT.HEIGHT, 0x000000, 0)
+      // Get game over screen from registry
+      const gameOverScreen = this.registry.get('gameOverScreen');
+      
+      if (gameOverScreen) {
+        // Show HTML game over screen after a short delay
+        this.time.delayedCall(500, () => {
+          gameOverScreen.show(
+            isWin, 
+            this.playerName, 
+            () => this.scene.restart({ playerName: this.playerName }), // Play again callback
+            () => {
+              // Quit to menu callback
+              window.location.reload();
+            }
+          );
+        });
+      }
+
+      // Create a simple Phaser overlay to dim the game
+      const overlay = this.add.rectangle(LAYOUT.CENTER_X, LAYOUT.HEIGHT / 2, LAYOUT.WIDTH, LAYOUT.HEIGHT, 0x000000, 0.7)
         .setDepth(100);
 
       this.tweens.add({
         targets: overlay,
-        fillAlpha: 0.85,
-        duration: 400
+        alpha: 0.7,
+        duration: 300
       });
 
-      const title = this.add.text(LAYOUT.CENTER_X, LAYOUT.HEIGHT / 2 - 75, isWin ? "Victory" : "Game Over", {
-        ...FONTS.HEADLINE,
-        fontSize: "40px",
-        color: isWin ? COLORS.SUCCESS : COLORS.DANGER
-      }).setOrigin(0.5).setDepth(101).setAlpha(0);
-
-      this.tweens.add({
-        targets: title,
-        alpha: 1,
-        y: LAYOUT.HEIGHT / 2 - 85,
-        duration: 400,
-        delay: 200,
-        ease: 'Back.easeOut'
-      });
-
-      const msg = this.add.text(LAYOUT.CENTER_X, LAYOUT.HEIGHT / 2 - 25,
-        isWin ? "You defeated the Dealer!" : "The Dealer got you...", {
-        ...FONTS.BODY,
-        color: COLORS.TEXT_SECONDARY
-      }).setOrigin(0.5).setDepth(101).setAlpha(0);
-
-      this.tweens.add({
-        targets: msg,
-        alpha: 1,
-        duration: 300,
-        delay: 400
-      });
-
-      this.restartBtn = this.add.container(LAYOUT.CENTER_X, LAYOUT.HEIGHT / 2 + 70).setDepth(101).setAlpha(0);
-
-      const btnColor = isWin ? 0x43a047 : 0xc62828;
-      const btnBg = this.add.rectangle(0, 0, 160, 46, btnColor, 1)
-        .setInteractive({ useHandCursor: true });
-
-      const btnText = this.add.text(0, 0, "Play Again", {
-        ...FONTS.LABEL,
-        fontSize: "16px"
-      }).setOrigin(0.5);
-
-      this.restartBtn.add([btnBg, btnText]);
-
-      this.tweens.add({
-        targets: this.restartBtn,
-        alpha: 1,
-        y: LAYOUT.HEIGHT / 2 + 60,
-        duration: 300,
-        delay: 500,
-        ease: 'Back.easeOut'
-      });
-
-      btnBg.on("pointerover", () => {
-        this.tweens.add({
-          targets: this.restartBtn,
-          scale: 1.05,
-          duration: 120
-        });
-      });
-
-      btnBg.on("pointerout", () => {
-        this.tweens.add({
-          targets: this.restartBtn,
-          scale: 1,
-          duration: 120
-        });
-      });
-
-      btnBg.on("pointerdown", () => {
-        this.scene.restart({ playerName: this.playerName });
-      });
+      this.restartBtn = true; // Mark that game over has been handled
     }
   }
 

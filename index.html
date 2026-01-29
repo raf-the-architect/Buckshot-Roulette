@@ -39,7 +39,51 @@
     </div>
   </div>
 
+  <!-- PREMIUM GAME OVER SCREEN -->
+  <div id="game-over-screen" class="hidden">
+    <div class="game-over-container">
+      <div class="celebration-bg">
+        <div class="floating-shapes">
+          <div class="shape shape-1"></div>
+          <div class="shape shape-2"></div>
+          <div class="shape shape-3"></div>
+          <div class="shape shape-4"></div>
+          <div class="shape shape-5"></div>
+          <div class="shape shape-6"></div>
+        </div>
+      </div>
+      
+      <div class="game-over-card">
+        <div class="result-icon">
+          <div class="icon-wrapper win-icon" id="result-icon">
+            <!-- Icon will be set dynamically -->
+          </div>
+        </div>
+        
+        <h1 class="result-title" id="result-title">Victory!</h1>
+        <p class="result-message" id="result-message">You defeated the Dealer!</p>
+        
+        <div class="player-name-display">
+          <span class="player-label">Player</span>
+          <span class="player-name" id="player-name-display">YOU</span>
+        </div>
+        
+        <div class="action-buttons">
+          <button class="play-again-btn" id="play-again-btn">
+            <span class="btn-text">Play Again</span>
+            <div class="btn-glow"></div>
+          </button>
+          
+          <button class="quit-btn" id="quit-btn">
+            <span class="btn-text">Quit to Menu</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.js"></script>
+  <script type="module" src="./gameOverScreen.js"></script>
   <script type="module" src="./main.js"></script>
 </body>
 
