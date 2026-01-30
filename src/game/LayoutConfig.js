@@ -6,26 +6,35 @@
 import { ITEM_KEYS } from "./gameLogic.js";
 
 // ============================================================================
-// ASSET KEYS
+// ASSET KEYS - Organized by category
 // ============================================================================
 export const ASSETS = {
-    BG: "background.png",
-    AVATAR: "avatar.png",
-    AVATAR_ACTIVE: "avatar-active.png",
-    AVATAR_DEAD: "avatar-dead.png",
-    GUN: "gun.png",
-    BTN_SHOOT_PLAYER: "shoot-player_btn.png",
-    BTN_SHOOT_SELF: "shoot-self_btn.png",
-    AMMO_FILLED: "ammo_filled.png",
-    AMMO_EMPTY: "ammo_empty.png",
-    AMMO_UNKNOWN: "ammo_unknown.png",
-    HEART_FULL: "live-filled_icon.png",
-    HEART_EMPTY: "live-empty_icon.png",
-    ITEM_KNIFE: "knife_item.png",
-    ITEM_MAGNIFY: "magnifyin-glass_item.png",
-    ITEM_HANDCUFFS: "handcuffs_item.png",
-    ITEM_BEER: "beer_item.png",
-    ITEM_CIGARETTE: "sigarette_item.png"
+    // Background & Core
+    BG: "images/background.png",
+    GUN: "images/gun.png",
+
+    // Avatars
+    AVATAR: "images/avatars/avatar.png",
+    AVATAR_ACTIVE: "images/avatars/avatar-active.png",
+    AVATAR_DEAD: "images/avatars/avatar-dead.png",
+
+    // UI Elements
+    BTN_SHOOT_PLAYER: "images/ui/shoot-player_btn.png",
+    BTN_SHOOT_SELF: "images/ui/shoot-self_btn.png",
+    HEART_FULL: "images/ui/live-filled_icon.png",
+    HEART_EMPTY: "images/ui/live-empty_icon.png",
+
+    // Ammo
+    AMMO_FILLED: "images/ammo/ammo_filled.png",
+    AMMO_EMPTY: "images/ammo/ammo_empty.png",
+    AMMO_UNKNOWN: "images/ammo/ammo_unknown.png",
+
+    // Items
+    ITEM_KNIFE: "images/items/knife_item.png",
+    ITEM_MAGNIFY: "images/items/magnifyin-glass_item.png",
+    ITEM_HANDCUFFS: "images/items/handcuffs_item.png",
+    ITEM_BEER: "images/items/beer_item.png",
+    ITEM_CIGARETTE: "images/items/sigarette_item.png"
 };
 
 export const SOUNDS = {

@@ -1,0 +1,35 @@
+/* ==========================================================================
+   BASE STYLES
+   Variables, resets, and body styling
+   ========================================================================== */
+
+:root {
+    /* Palette - Playful & Bright */
+    --c-glass-bg: rgba(255, 255, 255, 0.65);
+    --c-glass-border: rgba(255, 255, 255, 0.8);
+    --c-accent: #ff4757;
+    /* Vibrant Red */
+    --c-accent-hover: #ff6b81;
+    --c-primary: #2ed573;
+    /* Joyful Green */
+    --c-text-main: #2f3542;
+    /* Soft Black */
+    --c-text-sub: #57606f;
+    /* Soft Gray */
+    --c-sky: #70a1ff;
+    --c-shadow: rgba(0, 0, 0, 0.15);
+    --c-glow: rgba(255, 71, 87, 0.4);
+
+    /* Spacing & Sizing */
+    --r-card: 24px;
+    --r-btn: 50px;
+    --r-input: 16px;
+}
+
+body {
+    margin: 0;
+    overflow: hidden;
+    font-family: 'Inter', sans-serif;
+    background-color: #000;
+    /* Game background is black, UI sits on top */
+}

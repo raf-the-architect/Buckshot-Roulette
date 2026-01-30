@@ -1,0 +1,154 @@
+/* ==========================================================================
+   REUSABLE COMPONENTS
+   Glass cards, buttons, inputs
+   ========================================================================== */
+
+/* ==========================================================================
+   GLASS CARD
+   ========================================================================== */
+
+.glass-card {
+    position: relative;
+    width: 90%;
+    max-width: 420px;
+    padding: 40px 32px;
+    text-align: center;
+
+    /* The Look */
+    background: rgba(255, 255, 255, 0.85);
+    /* Slightly more opaque for contrast */
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 4px solid var(--c-glass-border);
+    border-radius: var(--r-card);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3),
+        inset 0 0 0 2px rgba(255, 255, 255, 1);
+
+    /* Entrance Animation */
+    animation: popIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    opacity: 0;
+    transform: scale(0.8) translateY(20px);
+}
+
+/* ==========================================================================
+   CONTENT STYLING
+   ========================================================================== */
+
+.game-title {
+    font-size: 3.5rem;
+    font-weight: 800;
+    margin: 0 0 8px 0;
+    letter-spacing: -0.03em;
+
+    /* Colorful Gradient Text */
+    background: linear-gradient(135deg, #ff4757 0%, #ff6b81 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    /* Standard property for future support */
+
+    /* Drop shadow helper since text-shadow doesn't work with clip */
+    filter: drop-shadow(2px 2px 0px rgba(0, 0, 0, 0.1));
+
+    /* Bouncy Entrance */
+    animation: floatTitle 3s ease-in-out infinite;
+}
+
+.game-subtitle {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #2f3542;
+    /* Darker, clearer text */
+    margin-bottom: 32px;
+    line-height: 1.5;
+}
+
+.input-group {
+    position: relative;
+    margin-bottom: 24px;
+}
+
+/* Nintendo-style Input */
+.name-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 16px 20px;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #2f3542;
+    text-align: center;
+    background: #fff;
+    border: 3px solid #dfe4ea;
+    border-radius: var(--r-input);
+    outline: none;
+    transition: all 0.2s ease;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.name-input:placeholder {
+    color: #a4b0be;
+    font-weight: 500;
+}
+
+.name-input:focus {
+    background: #fff;
+    border-color: var(--c-sky);
+    color: var(--c-text-main);
+    box-shadow: 0 0 0 4px rgba(112, 161, 255, 0.3);
+    transform: translateY(-2px);
+}
+
+/* Nintendo-style Button */
+.start-btn {
+    width: 100%;
+    padding: 18px;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background-color: var(--c-accent);
+    border: none;
+    border-radius: var(--r-btn);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.1s cubic-bezier(0.34, 1.56, 0.64, 1),
+        background-color 0.2s,
+        box-shadow 0.2s;
+    box-shadow: 0 4px 0 #d63031,
+        0 8px 16px var(--c-shadow);
+}
+
+/* Shiny effect on button */
+.start-btn::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 50%;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.2), transparent);
+    border-radius: var(--r-btn) var(--r-btn) 0 0;
+}
+
+.start-btn:hover:not(:disabled) {
+    background-color: var(--c-accent-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 0 #d63031,
+        0 12px 20px var(--c-glow);
+}
+
+.start-btn:active:not(:disabled) {
+    transform: translateY(2px) scale(0.98);
+    box-shadow: 0 2px 0 #d63031,
+        0 4px 8px var(--c-shadow);
+}
+
+.start-btn:disabled {
+    background-color: #ccc;
+    box-shadow: none;
+    cursor: not-allowed;
+    transform: none;
+    opacity: 0.7;
+}

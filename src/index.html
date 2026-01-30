@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Buckshot Roulette</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description"
+        content="Buckshot Roulette - A thrilling game of chance and strategy. Take turns, choose wisely, survive the round!" />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet" />
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="styles/index.css" />
+</head>
+
+<body>
+    <!-- App Mount Point -->
+    <div id="app">
+        <!-- Start Screen -->
+        <start-screen v-if="currentScreen === 'start'" v-model="playerName" @start-game="onStartGame"
+            :class="{ hidden: isStartLeaving }"></start-screen>
+
+        <!-- Replay / Game Over Screen -->
+        <replay-screen v-if="currentScreen === 'replay'" :result="gameResult" @play-again="onReplay"
+            @quit="onQuit"></replay-screen>
+
+        <!-- Phaser Container -->
+        <div id="phaser-container" v-show="currentScreen === 'game' || currentScreen === 'replay'"></div>
+    </div>
+
+    <!-- Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.js"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+
+    <!-- Main Entry -->
+    <script type="module" src="main.js"></script>
+</body>
+
+</html>
