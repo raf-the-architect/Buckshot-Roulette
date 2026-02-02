@@ -12,15 +12,20 @@ export const ASSETS = {
     // Background & Core
     BG: "images/background.png",
     GUN: "images/gun.png",
+    CROSSED_REVOLVERS: "images/crossed-revolvers.png",
 
     // Avatars
-    AVATAR: "images/avatars/avatar.png",
-    AVATAR_ACTIVE: "images/avatars/avatar-active.png",
+    AVATAR_BOT: "images/avatars/avatar-bot.png",
+    AVATAR_PLAYER: "images/avatars/avatar-player.png",
     AVATAR_DEAD: "images/avatars/avatar-dead.png",
 
     // UI Elements
-    BTN_SHOOT_PLAYER: "images/ui/shoot-player_btn.png",
-    BTN_SHOOT_SELF: "images/ui/shoot-self_btn.png",
+    BTN_SHOOT_PLAYER_IDLE: "images/ui/shoot-player-idle.png",
+    BTN_SHOOT_PLAYER_PRESSED: "images/ui/shoot-player-pressed.png",
+    BTN_SHOOT_PLAYER_DISABLED: "images/ui/shoot-player-disabled.png",
+    BTN_SHOOT_SELF_IDLE: "images/ui/shoot-self-idle.png",
+    BTN_SHOOT_SELF_PRESSED: "images/ui/shoot-self-pressed.png",
+    BTN_SHOOT_SELF_DISABLED: "images/ui/shoot-self-disabled.png",
     HEART_FULL: "images/ui/live-filled_icon.png",
     HEART_EMPTY: "images/ui/live-empty_icon.png",
 
@@ -35,6 +40,12 @@ export const ASSETS = {
     ITEM_HANDCUFFS: "images/items/handcuffs_item.png",
     ITEM_BEER: "images/items/beer_item.png",
     ITEM_CIGARETTE: "images/items/sigarette_item.png"
+};
+
+export const AVATAR_KEYS = {
+    PLAYER: "avatarPlayer",
+    BOT: "avatarBot",
+    DEAD: "avatarDead"
 };
 
 export const SOUNDS = {
@@ -62,22 +73,21 @@ export const LAYOUT = {
     CENTER_X: 180,
     TOP_ZONE: { y: 70 },
     BOT_ITEMS_ZONE: { y: 135 },
-    GUN_ZONE: { y: 210 },
-    AMMO_ZONE: { y: 290 },
-    NEXT_AMMO_ZONE: { y: 245 },
-    BTN_ZONE: { y: 380 },
-    PLAYER_ITEMS_ZONE: { y: 470 },
-    BOTTOM_ZONE: { y: 560 }
+    GUN_ZONE: { y: 240 },
+    AMMO_ZONE: { y: 310 },
+    NEXT_AMMO_ZONE: { y: 265 },
+    PLAYER_ITEMS_ZONE: { y: 390 },
+    BTN_ZONE: { y: 580 },
+    BOTTOM_ZONE: { y: 500 }
 };
 
 export const SCALE = {
-    AVATAR: 0.22,
+    AVATAR: 0.5,
     GUN: 0.4,
-    BUTTON_PRIMARY: 0.55,
-    BUTTON_SECONDARY: 0.45,
-    AMMO: 0.25,
-    HEART: 0.28,
-    ITEM: 0.16
+    BUTTON: 0.5,
+    AMMO: 0.20,
+    HEART: 0.10,
+    ITEM: 0.10
 };
 
 // ============================================================================
@@ -98,6 +108,7 @@ export const COLORS = {
     // UI elements
     PANEL_BG: 0x1a1a1a,
     PANEL_BORDER: 0x333333,
+    PANEL_ROUNDED_RADIUS: 12,
 
     // Tints
     TINT_DISABLED: 0x555555,

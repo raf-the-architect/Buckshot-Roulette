@@ -1,5 +1,5 @@
 import { applyAction, createInitialState, refillShotgun, giveItems, ITEM_KEYS } from "./gameLogic.js";
-import { ASSETS, SOUNDS, ITEM_ASSET_MAP, LAYOUT, SCALE, COLORS, FONTS } from "./LayoutConfig.js";
+import { ASSETS, SOUNDS, ITEM_ASSET_MAP, LAYOUT, SCALE, COLORS, FONTS, AVATAR_KEYS } from "./LayoutConfig.js";
 import { EffectsManager } from "./EffectsManager.js";
 import { AIController } from "./AIController.js";
 
@@ -13,35 +13,63 @@ export class GameScene extends Phaser.Scene {
     this.playerName = data.playerName || "YOU";
   }
 
+  update() {
+    // Update mask positions if containers move
+    if (this.maskGraphicsMap) {
+      this.maskGraphicsMap.forEach((graphics, container) => {
+        graphics.x = container.x;
+        graphics.y = container.y;
+      });
+    }
+  }
+
   // ==========================================================================
   // PRELOAD
   // ==========================================================================
   preload() {
-    const base = "assets/";
-    this.load.image("bg", base + ASSETS.BG);
-    this.load.image("avatar", base + ASSETS.AVATAR);
-    this.load.image("avatarActive", base + ASSETS.AVATAR_ACTIVE);
-    this.load.image("avatarDead", base + ASSETS.AVATAR_DEAD);
-    this.load.image("gun", base + ASSETS.GUN);
-    this.load.image("btnShootPlayer", base + ASSETS.BTN_SHOOT_PLAYER);
-    this.load.image("btnShootSelf", base + ASSETS.BTN_SHOOT_SELF);
-    this.load.image("ammoFilled", base + ASSETS.AMMO_FILLED);
-    this.load.image("ammoEmpty", base + ASSETS.AMMO_EMPTY);
-    this.load.image("ammoUnknown", base + ASSETS.AMMO_UNKNOWN);
-    this.load.image("heartFull", base + ASSETS.HEART_FULL);
-    this.load.image("heartEmpty", base + ASSETS.HEART_EMPTY);
-    this.load.image("itemKnife", base + ASSETS.ITEM_KNIFE);
-    this.load.image("itemMagnify", base + ASSETS.ITEM_MAGNIFY);
-    this.load.image("itemHandcuffs", base + ASSETS.ITEM_HANDCUFFS);
-    this.load.image("itemBeer", base + ASSETS.ITEM_BEER);
-    this.load.image("itemCigarette", base + ASSETS.ITEM_CIGARETTE);
+    this.load.setPath("assets/");
 
-    // Load sounds
-    this.load.audio("sndSpin", base + SOUNDS.REVOLVER_SPIN);
-    this.load.audio("sndReload", base + SOUNDS.RELOAD);
-    this.load.audio("sndGunshot", base + SOUNDS.GUNSHOT);
-    this.load.audio("sndDryFire", base + SOUNDS.DRY_FIRE);
-    this.load.audio("sndMusic", base + SOUNDS.BG_MUSIC);
+    // Core
+    this.load.image("bg", ASSETS.BG);
+    this.load.image("gun", ASSETS.GUN);
+    this.load.image("crossedRevolvers", ASSETS.CROSSED_REVOLVERS);
+
+    // Avatars
+    this.load.image(AVATAR_KEYS.BOT, ASSETS.AVATAR_BOT);
+    this.load.image(AVATAR_KEYS.PLAYER, ASSETS.AVATAR_PLAYER);
+    this.load.image(AVATAR_KEYS.DEAD, ASSETS.AVATAR_DEAD);
+
+    // UI Buttons
+    this.load.image("btnShootPlayerIdle", ASSETS.BTN_SHOOT_PLAYER_IDLE);
+    this.load.image("btnShootPlayerPressed", ASSETS.BTN_SHOOT_PLAYER_PRESSED);
+    this.load.image("btnShootPlayerDisabled", ASSETS.BTN_SHOOT_PLAYER_DISABLED);
+
+    this.load.image("btnShootSelfIdle", ASSETS.BTN_SHOOT_SELF_IDLE);
+    this.load.image("btnShootSelfPressed", ASSETS.BTN_SHOOT_SELF_PRESSED);
+    this.load.image("btnShootSelfDisabled", ASSETS.BTN_SHOOT_SELF_DISABLED);
+
+    this.load.image("ammoFilled", ASSETS.AMMO_FILLED);
+    this.load.image("ammoEmpty", ASSETS.AMMO_EMPTY);
+    this.load.image("ammoUnknown", ASSETS.AMMO_UNKNOWN);
+    this.load.image("heartFull", ASSETS.HEART_FULL);
+    this.load.image("heartEmpty", ASSETS.HEART_EMPTY);
+    this.load.image("itemKnife", ASSETS.ITEM_KNIFE);
+    this.load.image("itemMagnify", ASSETS.ITEM_MAGNIFY);
+    this.load.image("itemHandcuffs", ASSETS.ITEM_HANDCUFFS);
+    this.load.image("itemBeer", ASSETS.ITEM_BEER);
+    this.load.image("itemCigarette", ASSETS.ITEM_CIGARETTE);
+
+    // Sounds
+    this.load.audio("sndSpin", SOUNDS.REVOLVER_SPIN);
+    this.load.audio("sndReload", SOUNDS.RELOAD);
+    this.load.audio("sndGunshot", SOUNDS.GUNSHOT);
+    this.load.audio("sndDryFire", SOUNDS.DRY_FIRE);
+    this.load.audio("sndMusic", SOUNDS.BG_MUSIC);
+
+    // Debugging
+    this.load.on("loaderror", (file) => {
+      console.error(`[LOAD ERROR] Key: ${file.key}, Full URL: ${file.url}`);
+    });
   }
 
   // ==========================================================================
@@ -94,30 +122,103 @@ export class GameScene extends Phaser.Scene {
   // ==========================================================================
   setupHUD() {
     // Round indicator panel (top-left)
-    const roundPanel = this.add.container(60, 18);
-    const roundBg = this.add.rectangle(0, 0, 100, 28, COLORS.PANEL_BG, 0.8)
+    // Round indicator panel (top-left) - Styled
+    const roundPanel = this.add.container(60, 25);
+    const roundBg = this.add.rectangle(0, 0, 90, 32, COLORS.PANEL_BG, 0.95)
       .setStrokeStyle(1, COLORS.PANEL_BORDER);
-    this.hudRound = this.add.text(0, 0, "Round 1", {
+
+    // Manual rounded corners not supported on Rectangle directly in all Phaser versions easily without Texture or Graphics.
+    // Using Graphics for rounded background
+    const roundBgGraphics = this.add.graphics();
+    roundBgGraphics.fillStyle(COLORS.PANEL_BG, 0.95);
+    roundBgGraphics.lineStyle(1, COLORS.PANEL_BORDER);
+    roundBgGraphics.fillRoundedRect(-45, -16, 90, 32, 8);
+    roundBgGraphics.strokeRoundedRect(-45, -16, 90, 32, 8);
+    roundBg.setVisible(false); // Hide the simple rect
+
+    this.hudRound = this.add.text(0, -1, "Round 1", {
       ...FONTS.LABEL,
       fontSize: "13px"
     }).setOrigin(0.5);
-    roundPanel.add([roundBg, this.hudRound]);
+    roundPanel.add([roundBgGraphics, this.hudRound]);
 
     // Turn indicator panel (top-right)
-    const turnPanel = this.add.container(LAYOUT.WIDTH - 70, 18);
-    const turnBg = this.add.rectangle(0, 0, 120, 28, COLORS.PANEL_BG, 0.8)
-      .setStrokeStyle(1, COLORS.PANEL_BORDER);
-    this.hudTurn = this.add.text(0, 0, "Your Turn", {
+    // Turn indicator panel (top-right) - Styled
+    const turnPanel = this.add.container(LAYOUT.WIDTH - 70, 25);
+
+    const turnBgGraphics = this.add.graphics();
+    turnBgGraphics.fillStyle(COLORS.PANEL_BG, 0.95);
+    turnBgGraphics.lineStyle(1, COLORS.PANEL_BORDER);
+    turnBgGraphics.fillRoundedRect(-60, -16, 120, 32, 8);
+    turnBgGraphics.strokeRoundedRect(-60, -16, 120, 32, 8);
+
+    this.hudTurn = this.add.text(0, -1, "Your Turn", {
       ...FONTS.LABEL,
       fontSize: "13px"
     }).setOrigin(0.5);
-    this.turnBg = turnBg;
+    this.turnBg = turnBgGraphics; // Updated reference to graphics
     this.turnPanel = turnPanel;
-    turnPanel.add([turnBg, this.hudTurn]);
+    turnPanel.add([turnBgGraphics, this.hudTurn]);
 
-    // Turn glow indicator
-    this.turnGlow = this.add.rectangle(LAYOUT.WIDTH - 70, 18, 124, 32, 0x4a90d9, 0)
-      .setStrokeStyle(2, 0x4a90d9);
+    // Turn glow indicator (Rounded)
+    this.turnGlow = this.add.graphics();
+    this.turnGlow.lineStyle(2, 0x4a90d9);
+    this.turnGlow.strokeRoundedRect(LAYOUT.WIDTH - 70 - 62, 25 - 18, 124, 36, 10);
+    this.turnGlow.setAlpha(0);
+  }
+
+  // ==========================================================================
+  // AVATAR STATES
+  // ==========================================================================
+  updateAvatarStates() {
+    if (!this.playerContainers) return;
+
+    const currentTurnIndex = this.state.currentTurnIndex;
+
+    this.playerContainers.forEach((pc, index) => {
+      const isActive = (index === currentTurnIndex);
+      const isDead = this.state.players[index].health <= 0;
+
+      // Reset tweens if needed or just update props
+      if (isDead) {
+        pc.avatar.setTint(0x555555);
+        pc.avatar.setAlpha(0.6);
+        pc.glowRing.setAlpha(0);
+      } else if (isActive) {
+        pc.avatar.clearTint();
+        pc.avatar.setAlpha(1);
+
+        // Pulse Glow
+        this.tweens.killTweensOf(pc.glowRing);
+        pc.glowRing.setAlpha(0.4);
+        this.tweens.add({
+          targets: pc.glowRing,
+          alpha: 0.1,
+          scale: 1.1,
+          duration: 800,
+          yoyo: true,
+          repeat: -1
+        });
+
+        // Slight scale up for active avatar
+        this.tweens.add({
+          targets: pc.avatar,
+          scale: SCALE.AVATAR * 1.05,
+          duration: 400
+        });
+      } else {
+        // Idle
+        pc.avatar.clearTint();
+        pc.avatar.setAlpha(0.8); // Slightly dim inactive
+        pc.glowRing.setAlpha(0);
+
+        this.tweens.add({
+          targets: pc.avatar,
+          scale: SCALE.AVATAR,
+          duration: 400
+        });
+      }
+    });
   }
 
   // ==========================================================================
@@ -135,25 +236,49 @@ export class GameScene extends Phaser.Scene {
     positions.forEach((pos, i) => {
       const container = this.add.container(pos.x, pos.y);
 
-      // Active player glow ring (hidden initially)
-      const glowRing = this.add.ellipse(0, 0, 85, 85, 0x4a90d9, 0);
+      // Avatar Setup - NO MASKS, State-based feedback
+      const avatarKey = pos.id === "BOT" ? AVATAR_KEYS.BOT : AVATAR_KEYS.PLAYER;
 
-      const avatar = this.add.image(0, 0, "avatar")
+      const avatar = this.add.image(0, 0, avatarKey)
+        .setOrigin(0.5)
         .setScale(SCALE.AVATAR)
-        .setOrigin(0.5, 0.5);
+        .setAlpha(1)
+        .setDepth(5);
 
-      const nameText = this.add.text(0, 48, pos.name, {
+      // Glow Ring (Active State)
+      const glowRing = this.add.circle(0, 0, 55, 0x4a90d9, 0);
+
+      // Name Text
+      const nameText = this.add.text(0, 56, pos.name, {
         ...FONTS.BODY,
         fontSize: "13px",
         color: COLORS.TEXT_PRIMARY
       }).setOrigin(0.5);
 
-      const heartContainer = this.add.container(0, 72);
+      const heartContainer = this.add.container(0, 80);
+      const itemContainer = pos.id === "BOT" ? this.botItemsContainer : this.playerItemsContainer;
 
       container.add([glowRing, avatar, nameText, heartContainer]);
-      this.playerContainers[i] = { container, heartContainer, avatar, glowRing, id: pos.id, nameText };
+      this.playerContainers[i] = {
+        container,
+        avatar,
+        heartContainer,
+        itemContainer,
+        glowRing,
+        id: pos.id,
+        nameText
+      };
 
-      // Subtle idle breathing (reduced intensity)
+      // Safety Assertion
+      if (!this.playerContainers[i].avatar) {
+        console.error("Missing avatar in player container", this.playerContainers[i]);
+      }
+
+      // High depth to ensure they are on top
+      container.setDepth(10);
+
+
+      // Subtle idle breathing
       this.tweens.add({
         targets: container,
         y: pos.y + (i === 0 ? 3 : -3),
@@ -163,6 +288,9 @@ export class GameScene extends Phaser.Scene {
         ease: 'Sine.easeInOut'
       });
     });
+
+    // Initial state check
+    this.updateAvatarStates();
   }
 
   setupGun() {
@@ -176,60 +304,51 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5, 0.5)
       .setVisible(false);
 
-    // Crossed revolvers container (for knife double damage)
-    this.crossedRevolversContainer = this.add.container(LAYOUT.CENTER_X, LAYOUT.GUN_ZONE.y);
-
-    this.gunLeft = this.add.image(-25, 0, "gun")
-      .setScale(SCALE.GUN * 0.85)
+    // Crossed revolvers sprite (Visual replacement for knife logic)
+    this.crossedRevolversSprite = this.add.image(LAYOUT.CENTER_X, LAYOUT.GUN_ZONE.y, "crossedRevolvers")
+      .setScale(SCALE.GUN)
       .setOrigin(0.5, 0.5)
-      .setAngle(-35)
-      .setFlipX(true);
-
-    this.gunRight = this.add.image(25, 0, "gun")
-      .setScale(SCALE.GUN * 0.85)
-      .setOrigin(0.5, 0.5)
-      .setAngle(35);
-
-    this.crossedRevolversContainer.add([this.gunLeft, this.gunRight]);
-    this.crossedRevolversContainer.setVisible(false);
+      .setVisible(false);
   }
 
   setupUI() {
     // Ammo container
     this.ammoContainer = this.add.container(LAYOUT.CENTER_X, LAYOUT.AMMO_ZONE.y);
 
-    // Buttons - Asymmetric layout
-    const btnOffsetPrimary = 85;
-    const btnOffsetSecondary = 95;
+    // Buttons - Dynamic Bottom Layout
+    // No hardcoded spacing. Fit to width.
 
-    // Shoot Dealer (Primary - Dominant)
-    this.btnShootBot = this.add.image(LAYOUT.CENTER_X - btnOffsetPrimary, LAYOUT.BTN_ZONE.y - 5, "btnShootPlayer")
-      .setScale(SCALE.BUTTON_PRIMARY)
+    const margin = 8;
+    const gap = 8;
+    const availableWidth = LAYOUT.WIDTH - (margin * 2);
+    const btnWidth = (availableWidth - gap) / 2;
+    const btnY = LAYOUT.HEIGHT - 32; // Anchored slightly lower if margin is smaller
+
+    // Shoot Dealer (Left)
+    this.btnShootBot = this.add.image(margin + btnWidth / 2, btnY, "btnShootPlayerIdle")
+      // .setScale(SCALE.BUTTON) // We will scale to fit width instead of fixed scale
       .setOrigin(0.5, 0.5);
 
-    // Label for Shoot Dealer
-    this.add.text(LAYOUT.CENTER_X - btnOffsetPrimary, LAYOUT.BTN_ZONE.y + 35, "Shoot Dealer", {
-      ...FONTS.SMALL,
-      fontSize: "10px",
-      color: COLORS.TEXT_SECONDARY
-    }).setOrigin(0.5);
+    // Auto-scale to fit constrained width if needed, or stick to consistent size if it fits?
+    // "Scale buttons proportionally to fill buttonWidth" -> implication: buttons should be wide.
+    // Our buttons are icons. Let's just center them in their zones, or scale them to be large hit targets.
+    // Let's keep aspect ratio but maximize size within the slot.
+    const idealHeight = 60;
+    const scaleX = btnWidth / this.btnShootBot.width;
+    const scaleY = idealHeight / this.btnShootBot.height;
+    const finalScale = Math.min(scaleX, scaleY, 0.8); // 0.8 max to not be huge
 
-    this.setupButtonFeedback(this.btnShootBot, SCALE.BUTTON_PRIMARY, () =>
+    this.btnShootBot.setScale(finalScale);
+
+    this.setupButtonFeedback(this.btnShootBot, "btnShootPlayer", finalScale, () =>
       this.onPlayerAction({ type: "SHOOT_PLAYER", playerId: "YOU", targetId: "BOT" }));
 
-    // Shoot Self (Secondary - Dangerous)
-    this.btnShootSelf = this.add.image(LAYOUT.CENTER_X + btnOffsetSecondary, LAYOUT.BTN_ZONE.y + 5, "btnShootSelf")
-      .setScale(SCALE.BUTTON_SECONDARY)
+    // Shoot Self (Right)
+    this.btnShootSelf = this.add.image(margin + btnWidth + gap + btnWidth / 2, btnY, "btnShootSelfIdle")
+      .setScale(finalScale)
       .setOrigin(0.5, 0.5);
 
-    // Label for Shoot Self
-    this.add.text(LAYOUT.CENTER_X + btnOffsetSecondary, LAYOUT.BTN_ZONE.y + 40, "Shoot Self", {
-      ...FONTS.SMALL,
-      fontSize: "10px",
-      color: COLORS.TEXT_MUTED
-    }).setOrigin(0.5);
-
-    this.setupButtonFeedback(this.btnShootSelf, SCALE.BUTTON_SECONDARY, () =>
+    this.setupButtonFeedback(this.btnShootSelf, "btnShootSelf", finalScale, () =>
       this.onPlayerAction({ type: "SHOOT_SELF", playerId: "YOU" }));
 
     // Item containers
@@ -253,36 +372,23 @@ export class GameScene extends Phaser.Scene {
     this.nextAmmoRevealed = null;
     this.nextAmmoSprite.setVisible(false);
     this.gunSprite.setAngle(0);
-    this.crossedRevolversContainer.setAngle(0);
+    this.crossedRevolversSprite.setAngle(0);
 
     console.log(`[STATE] New Round Started. Chamber: ${this.roundStartLive} Live, ${this.roundStartBlank} Blank`);
 
     // Play spin sound
     this.sound.play("sndSpin");
 
-    // Show loading text during reveal
-    this.revealLabel = this.add.text(LAYOUT.CENTER_X, LAYOUT.AMMO_ZONE.y - 35, "Loading chamber...", {
-      ...FONTS.SMALL,
-      color: COLORS.TEXT_MUTED
-    }).setOrigin(0.5).setAlpha(0);
+    // LOADING TEXT REMOVED - Visuals only
 
-    this.tweens.add({
-      targets: this.revealLabel,
-      alpha: 0.8,
-      duration: 300
-    });
+    this.render();
 
     this.render();
 
     // Disable all actions for 3 seconds
     this.time.delayedCall(3000, () => {
-      // Fade out reveal label
-      this.tweens.add({
-        targets: this.revealLabel,
-        alpha: 0,
-        duration: 300,
-        onComplete: () => this.revealLabel.destroy()
-      });
+      // Reveal ended
+
 
       // Soft exit for reveal phase
       this.tweens.add({
@@ -293,7 +399,9 @@ export class GameScene extends Phaser.Scene {
           this.ammoRevealPhase = false;
           this.render();
           this.ammoContainer.setAlpha(1);
-          this.ai.checkTurn();
+          this.ammoContainer.setAlpha(1);
+          this.ai.checkTurn(); // Triggers first turn
+          this.updateAvatarStates();
         }
       });
     });
@@ -306,15 +414,15 @@ export class GameScene extends Phaser.Scene {
 
     this.sound.play("sndReload");
 
-    // Styled reload message
+    // Reload Text REMOVED - Visuals only
+    // Replaced by simple icon or audio cue primarily
+
+    // We can keep a small subtle icon if needed, but text is forbidden under items.
+    // The ammo reveal sequence follows shortly.
+
     const reloadContainer = this.add.container(LAYOUT.CENTER_X, LAYOUT.HEIGHT / 2);
-    const reloadBg = this.add.rectangle(0, 0, 160, 50, COLORS.PANEL_BG, 0.9)
-      .setStrokeStyle(1, COLORS.PANEL_BORDER);
-    const reloadText = this.add.text(0, 0, "Reloading...", {
-      ...FONTS.LABEL,
-      color: COLORS.WARNING
-    }).setOrigin(0.5);
-    reloadContainer.add([reloadBg, reloadText]);
+    // JUST ANIMATION - No Text
+    // Maybe a spinning cylinder icon? For now, we rely on the sound and the delay.
 
     this.tweens.add({
       targets: reloadContainer,
@@ -324,13 +432,9 @@ export class GameScene extends Phaser.Scene {
       ease: 'Back.easeOut'
     });
 
-    this.tweens.add({
-      targets: reloadText,
-      alpha: { from: 1, to: 0.6 },
-      duration: 400,
-      yoyo: true,
-      repeat: 3
-    });
+    // Simplified Reload Animation (Pulse only if anything)
+    // Actually, destroying the container logic below handles cleanup.
+    // We already removed the text content.
 
     this.time.delayedCall(3000, () => {
       this.tweens.add({
@@ -511,23 +615,32 @@ export class GameScene extends Phaser.Scene {
 
     this.showActionIndicator(actorId, action.type, action.item);
 
-    // Gun rotation logic
+    // Gun rotation logic - EXPLICIT TARGETING
     let targetAngle = 0;
+
     if (action.type === "SHOOT_PLAYER") {
-      targetAngle = (actorId === "YOU") ? -90 : 90;
+      // Shooting Opponent -> Points UP (-90 degrees)
+      targetAngle = -90;
     } else if (action.type === "SHOOT_SELF") {
-      targetAngle = (actorId === "YOU") ? 90 : -90;
+      // Shooting Self -> Points DOWN (+90 degrees)
+      targetAngle = 90;
     }
 
     if (isShot) {
       this.isProcessing = true;
+
+      // Ensure gun is on top
+      this.gunSprite.setDepth(20);
+
       this.tweens.add({
-        targets: [this.gunSprite, this.crossedRevolversContainer],
+        targets: this.gunSprite,
         angle: targetAngle,
-        duration: 280,
+        duration: 200,
         ease: 'Cubic.easeOut'
       });
-      this.time.delayedCall(350, () => {
+
+
+      this.time.delayedCall(300, () => {
         this.processAction(action, actorId, wasLive, prevChamberLength);
       });
     } else {
@@ -564,7 +677,7 @@ export class GameScene extends Phaser.Scene {
       }
       this.effects.playShootEffect(wasLive, action);
 
-      this.crossedRevolversContainer.setVisible(false);
+      this.crossedRevolversSprite.setVisible(false);
       this.gunSprite.setVisible(true);
       this.gunSprite.clearTint();
 
@@ -615,17 +728,24 @@ export class GameScene extends Phaser.Scene {
       this.isProcessing = true;
       this.time.delayedCall(700, () => {
         this.isProcessing = false;
+
+        // Reset Gun to Neutral (0)
         this.tweens.add({
-          targets: [this.gunSprite, this.crossedRevolversContainer],
+          targets: [this.gunSprite, this.crossedRevolversSprite],
           angle: 0,
           duration: 280,
           ease: 'Cubic.easeOut'
         });
+
         this.ai.checkTurn();
+
+        // Update avatars safely
+        this.updateAvatarStates();
       });
     } else {
       this.time.delayedCall(80, () => {
         this.ai.checkTurn();
+        this.updateAvatarStates();
       });
     }
   }
@@ -833,34 +953,6 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  playKnifeEffect() {
-    this.crossedRevolversContainer.setVisible(true);
-    this.crossedRevolversContainer.setAlpha(0);
-    this.crossedRevolversContainer.setScale(0.3);
-
-    this.gunSprite.setVisible(false);
-
-    this.gunLeft.setTint(0xc62828);
-    this.gunRight.setTint(0xc62828);
-
-    this.tweens.add({
-      targets: this.crossedRevolversContainer,
-      alpha: 1,
-      scale: 1,
-      duration: 280,
-      ease: 'Back.easeOut'
-    });
-
-    const slash = this.add.rectangle(LAYOUT.CENTER_X - 18, LAYOUT.GUN_ZONE.y, 55, 3, 0xc62828, 1)
-      .setAngle(-45);
-    this.tweens.add({
-      targets: slash,
-      x: LAYOUT.CENTER_X + 18,
-      alpha: 0,
-      duration: 180,
-      onComplete: () => slash.destroy()
-    });
-  }
 
   // ==========================================================================
   // AI TURN
@@ -873,7 +965,7 @@ export class GameScene extends Phaser.Scene {
 
     // Reset knife visuals if damage is back to 1
     if (this.state.shotgun.damage === 1) {
-      this.crossedRevolversContainer.setVisible(false);
+      this.crossedRevolversSprite.setVisible(false);
       this.gunSprite.setVisible(true);
       this.gunSprite.clearTint();
     }
@@ -921,10 +1013,11 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  setupButtonFeedback(button, baseScale, callback) {
+  setupButtonFeedback(button, baseKey, baseScale, callback) {
     button.setInteractive({ useHandCursor: true });
 
     button.on("pointerdown", () => {
+      button.setTexture(baseKey + "Pressed");
       this.tweens.add({
         targets: button,
         scale: baseScale * 0.88,
@@ -935,6 +1028,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     button.on("pointerup", () => {
+      button.setTexture(baseKey + "Idle");
       this.tweens.add({
         targets: button,
         scale: baseScale * 1.08,
@@ -951,6 +1045,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     button.on("pointerout", () => {
+      button.setTexture(baseKey + "Idle");
       this.tweens.add({
         targets: button,
         scale: baseScale,
@@ -970,17 +1065,21 @@ export class GameScene extends Phaser.Scene {
     if (canAct) {
       this.btnShootBot.setInteractive({ useHandCursor: true });
       this.btnShootSelf.setInteractive({ useHandCursor: true });
+      this.btnShootBot.setTexture("btnShootPlayerIdle");
+      this.btnShootSelf.setTexture("btnShootSelfIdle");
       this.btnShootBot.clearTint();
       this.btnShootSelf.clearTint();
       this.btnShootBot.setAlpha(1);
-      this.btnShootSelf.setAlpha(0.9);
+      this.btnShootSelf.setAlpha(1);
     } else {
       this.btnShootBot.disableInteractive();
       this.btnShootSelf.disableInteractive();
-      this.btnShootBot.setTint(COLORS.TINT_DISABLED);
-      this.btnShootSelf.setTint(COLORS.TINT_DISABLED);
-      this.btnShootBot.setAlpha(0.35);
-      this.btnShootSelf.setAlpha(0.3);
+      this.btnShootBot.setTexture("btnShootPlayerDisabled");
+      this.btnShootSelf.setTexture("btnShootSelfDisabled");
+      this.btnShootBot.clearTint();
+      this.btnShootSelf.clearTint();
+      this.btnShootBot.setAlpha(1);
+      this.btnShootSelf.setAlpha(1);
     }
   }
 
@@ -1071,6 +1170,7 @@ export class GameScene extends Phaser.Scene {
       const currentActor = players[currentTurnIdx];
       const turnName = currentActor.id === "YOU" ? "Your Turn" : "Dealer's Turn";
       const turnColor = currentActor.id === "YOU" ? COLORS.SUCCESS : COLORS.DANGER;
+      const turnColorHex = currentActor.id === "YOU" ? 0x43a047 : 0xc62828;
 
       if (this.hudTurn.text !== turnName) {
         this.tweens.add({
@@ -1080,22 +1180,37 @@ export class GameScene extends Phaser.Scene {
           onComplete: () => {
             this.hudTurn.setText(turnName);
             this.hudTurn.setColor(turnColor);
-            this.turnBg.setStrokeStyle(1, currentActor.id === "YOU" ? 0x43a047 : 0xc62828);
+
+            // Update Graphics Stroke
+            this.turnBg.clear();
+            this.turnBg.fillStyle(COLORS.PANEL_BG, 0.95);
+            this.turnBg.lineStyle(1, turnColorHex);
+            this.turnBg.fillRoundedRect(-60, -16, 120, 32, 8);
+            this.turnBg.strokeRoundedRect(-60, -16, 120, 32, 8);
+
             this.tweens.add({
               targets: [this.hudTurn, this.turnBg],
               alpha: { from: 0, to: 1 },
               duration: 120
             });
-          }
-        });
 
-        // Turn glow pulse
-        this.turnGlow.setStrokeStyle(2, currentActor.id === "YOU" ? 0x43a047 : 0xc62828);
-        this.tweens.add({
-          targets: this.turnGlow,
-          alpha: { from: 0, to: 0.6 },
-          duration: 300,
-          yoyo: true
+            // Single Pulse on turn start (If it's YOUR turn)
+            if (currentActor.id === "YOU") {
+              this.turnGlow.clear();
+              this.turnGlow.lineStyle(2, 0x43a047);
+              this.turnGlow.strokeRoundedRect(LAYOUT.WIDTH - 70 - 62, 25 - 18, 124, 36, 10);
+
+              this.turnGlow.setAlpha(0.8);
+              this.tweens.add({
+                targets: this.turnGlow,
+                alpha: 0,
+                scaleX: 1.05,
+                scaleY: 1.1,
+                duration: 500,
+                ease: 'Quad.out'
+              });
+            }
+          }
         });
       }
     }
@@ -1119,13 +1234,13 @@ export class GameScene extends Phaser.Scene {
 
       // Get game over screen from registry
       const gameOverScreen = this.registry.get('gameOverScreen');
-      
+
       if (gameOverScreen) {
         // Show HTML game over screen after a short delay
         this.time.delayedCall(500, () => {
           gameOverScreen.show(
-            isWin, 
-            this.playerName, 
+            isWin,
+            this.playerName,
             () => this.scene.restart({ playerName: this.playerName }), // Play again callback
             () => {
               // Quit to menu callback
@@ -1157,17 +1272,25 @@ export class GameScene extends Phaser.Scene {
     const startX = -((Math.min(items.length, 6) - 1) * itemSpacing) / 2;
 
     items.forEach((item, i) => {
+      const assetKey = ITEM_ASSET_MAP[item];
       const col = i % 6;
       const row = Math.floor(i / 6);
       const tx = startX + col * itemSpacing;
-      const ty = row * 32;
+      const ty = row * 42; // Slightly increased row spacing
 
-      const assetKey = ITEM_ASSET_MAP[item];
-      if (!assetKey) return;
+      // Item Size Normalization
+      // Preservation of aspect ratio while targeting max 64px
+      const icon = this.add.image(tx, ty, assetKey);
 
-      const icon = this.add.image(tx, ty, assetKey)
-        .setScale(SCALE.ITEM)
-        .setOrigin(0.5, 0.5);
+      const maxDim = 32;
+      const scale = Math.min(maxDim / icon.width, maxDim / icon.height);
+      icon.setScale(scale);
+
+      if (icon.texture) {
+        icon.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
+      }
+
+      icon.setOrigin(0.5, 0.5);
 
       // Dealer items de-emphasized
       if (isDealer) {
@@ -1181,6 +1304,8 @@ export class GameScene extends Phaser.Scene {
         icon.setAlpha(0.4);
       }
 
+      const baseScale = icon.scaleX;
+
       if (isInteractive && !this.ammoRevealPhase && !this.betweenRounds) {
         icon.setInteractive({ useHandCursor: true });
 
@@ -1188,7 +1313,7 @@ export class GameScene extends Phaser.Scene {
         icon.on("pointerover", () => {
           this.tweens.add({
             targets: icon,
-            scale: SCALE.ITEM * 1.12,
+            scale: baseScale * 1.12,
             duration: 100
           });
         });
@@ -1196,7 +1321,7 @@ export class GameScene extends Phaser.Scene {
         icon.on("pointerout", () => {
           this.tweens.add({
             targets: icon,
-            scale: SCALE.ITEM,
+            scale: baseScale,
             duration: 100
           });
         });

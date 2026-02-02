@@ -210,19 +210,16 @@ export class EffectsManager {
     }
 
     playKnifeEffect() {
-        this.scene.crossedRevolversContainer.setVisible(true);
-        this.scene.crossedRevolversContainer.setAlpha(0);
-        this.scene.crossedRevolversContainer.setScale(0.3);
+        this.scene.crossedRevolversSprite.setVisible(true);
+        this.scene.crossedRevolversSprite.setAlpha(0);
+        this.scene.crossedRevolversSprite.setScale(SCALE.GUN);
 
         this.scene.gunSprite.setVisible(false);
 
-        this.scene.gunLeft.setTint(0xc62828);
-        this.scene.gunRight.setTint(0xc62828);
-
         this.scene.tweens.add({
-            targets: this.scene.crossedRevolversContainer,
+            targets: this.scene.crossedRevolversSprite,
             alpha: 1,
-            scale: 1,
+            scale: SCALE.GUN,
             duration: 280,
             ease: 'Back.easeOut'
         });

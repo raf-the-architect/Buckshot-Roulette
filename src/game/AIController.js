@@ -24,7 +24,7 @@ export class AIController {
 
         // Reset knife visuals if damage is back to 1
         if (scene.state.shotgun.damage === 1) {
-            scene.crossedRevolversContainer.setVisible(false);
+            scene.crossedRevolversSprite.setVisible(false);
             scene.gunSprite.setVisible(true);
             scene.gunSprite.clearTint();
         }
