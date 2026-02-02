@@ -35,9 +35,15 @@ export class GameScene extends Phaser.Scene {
     this.load.image("crossedRevolvers", ASSETS.CROSSED_REVOLVERS);
 
     // Avatars
-    this.load.image(AVATAR_KEYS.BOT, ASSETS.AVATAR_BOT);
     this.load.image(AVATAR_KEYS.PLAYER, ASSETS.AVATAR_PLAYER);
-    this.load.image(AVATAR_KEYS.DEAD, ASSETS.AVATAR_DEAD);
+    this.load.image(AVATAR_KEYS.PLAYER_ACTIVE, ASSETS.AVATAR_PLAYER_ACTIVE);
+    this.load.image(AVATAR_KEYS.PLAYER_DEAD, ASSETS.AVATAR_PLAYER_DEAD);
+    this.load.image(AVATAR_KEYS.PLAYER_SELECTED, ASSETS.AVATAR_PLAYER_SELECTED);
+
+    this.load.image(AVATAR_KEYS.BOT, ASSETS.AVATAR_BOT);
+    this.load.image(AVATAR_KEYS.BOT_ACTIVE, ASSETS.AVATAR_BOT_ACTIVE);
+    this.load.image(AVATAR_KEYS.BOT_DEAD, ASSETS.AVATAR_BOT_DEAD);
+    this.load.image(AVATAR_KEYS.BOT_SELECTED, ASSETS.AVATAR_BOT_SELECTED);
 
     // UI Buttons
     this.load.image("btnShootPlayerIdle", ASSETS.BTN_SHOOT_PLAYER_IDLE);
@@ -95,6 +101,7 @@ export class GameScene extends Phaser.Scene {
     this.roundStartTotal = this.state.shotgun.chamber.length;
     this.nextAmmoRevealed = null;
     this.betweenRounds = false;
+    this.targetedIndex = null;
 
     // Background
     this.add.image(LAYOUT.CENTER_X, LAYOUT.HEIGHT / 2, "bg")
@@ -173,18 +180,33 @@ export class GameScene extends Phaser.Scene {
   updateAvatarStates() {
     if (!this.playerContainers) return;
 
-    const currentTurnIndex = this.state.currentTurnIndex;
-
     this.playerContainers.forEach((pc, index) => {
-      const isActive = (index === currentTurnIndex);
-      const isDead = this.state.players[index].health <= 0;
+      const player = this.state.players[index];
+      const isCurrentTurn = (index === this.state.currentTurnIndex);
+      const isDead = player.health <= 0;
+      const isTargeted = (index === this.targetedIndex);
 
-      // Reset tweens if needed or just update props
+      let textureKey;
+      if (player.id === "BOT") {
+        if (isDead) textureKey = AVATAR_KEYS.BOT_DEAD;
+        else if (isTargeted) textureKey = AVATAR_KEYS.BOT_SELECTED;
+        else if (isCurrentTurn) textureKey = AVATAR_KEYS.BOT_ACTIVE;
+        else textureKey = AVATAR_KEYS.BOT;
+      } else {
+        if (isDead) textureKey = AVATAR_KEYS.PLAYER_DEAD;
+        else if (isTargeted) textureKey = AVATAR_KEYS.PLAYER_SELECTED;
+        else if (isCurrentTurn) textureKey = AVATAR_KEYS.PLAYER_ACTIVE;
+        else textureKey = AVATAR_KEYS.PLAYER;
+      }
+
+      pc.avatar.setTexture(textureKey);
+
+      // Main depth and basic state visuals
       if (isDead) {
         pc.avatar.setTint(0x555555);
         pc.avatar.setAlpha(0.6);
         pc.glowRing.setAlpha(0);
-      } else if (isActive) {
+      } else if (isCurrentTurn) {
         pc.avatar.clearTint();
         pc.avatar.setAlpha(1);
 
@@ -209,7 +231,7 @@ export class GameScene extends Phaser.Scene {
       } else {
         // Idle
         pc.avatar.clearTint();
-        pc.avatar.setAlpha(0.8); // Slightly dim inactive
+        pc.avatar.setAlpha(0.8);
         pc.glowRing.setAlpha(0);
 
         this.tweens.add({
@@ -236,43 +258,49 @@ export class GameScene extends Phaser.Scene {
     positions.forEach((pos, i) => {
       const container = this.add.container(pos.x, pos.y);
 
-      // Avatar Setup - NO MASKS, State-based feedback
-      const avatarKey = pos.id === "BOT" ? AVATAR_KEYS.BOT : AVATAR_KEYS.PLAYER;
-
-      const avatar = this.add.image(0, 0, avatarKey)
-        .setOrigin(0.5)
+      // Avatar Setup - Created ONCE, single texture swap model
+      const initialKey = pos.id === "BOT" ? AVATAR_KEYS.BOT : AVATAR_KEYS.PLAYER;
+      const avatar = this.add.image(0, 0, initialKey)
+        .setOrigin(0.5, 0.5)
         .setScale(SCALE.AVATAR)
-        .setAlpha(1)
-        .setDepth(5);
+        .setAlpha(1);
 
       // Glow Ring (Active State)
       const glowRing = this.add.circle(0, 0, 55, 0x4a90d9, 0);
 
-      // Name Text
-      const nameText = this.add.text(0, 56, pos.name, {
+      // Name Text & Background (Applied to all players as requested)
+      const nameY = 40;
+      const heartY = 60;
+
+      const nameText = this.add.text(0, nameY, pos.name, {
         ...FONTS.BODY,
-        fontSize: "13px",
+        fontSize: "12px",
+        fontStyle: "bold",
         color: COLORS.TEXT_PRIMARY
-      }).setOrigin(0.5);
+      }).setOrigin(0.5).setDepth(2);
 
-      const heartContainer = this.add.container(0, 80);
-      const itemContainer = pos.id === "BOT" ? this.botItemsContainer : this.playerItemsContainer;
+      // Graphics for rounded black BG
+      const nameBg = this.add.graphics();
+      nameBg.fillStyle(0x000000, 0.85);
 
-      container.add([glowRing, avatar, nameText, heartContainer]);
+      // Dynamic padding for the name background
+      const bgW = nameText.width + 20;
+      const bgH = nameText.height + 6;
+      nameBg.fillRoundedRect(-bgW / 2, nameY - bgH / 2, bgW, bgH, 10);
+      nameBg.setDepth(1);
+
+      const heartContainer = this.add.container(0, heartY);
+      container.add([glowRing, avatar, nameBg, nameText, heartContainer]);
+
       this.playerContainers[i] = {
         container,
         avatar,
         heartContainer,
-        itemContainer,
         glowRing,
         id: pos.id,
-        nameText
+        nameText,
+        nameBg
       };
-
-      // Safety Assertion
-      if (!this.playerContainers[i].avatar) {
-        console.error("Missing avatar in player container", this.playerContainers[i]);
-      }
 
       // High depth to ensure they are on top
       container.setDepth(10);
@@ -603,7 +631,6 @@ export class GameScene extends Phaser.Scene {
   executeAction(action, actorId) {
     const chamber = this.state.shotgun.chamber;
     const prevChamberLength = chamber.length;
-    const prevHealth = this.state.players.map(p => p.health);
 
     let wasLive = false;
     const isShot = action.type.startsWith("SHOOT");
@@ -619,18 +646,28 @@ export class GameScene extends Phaser.Scene {
     let targetAngle = 0;
 
     if (action.type === "SHOOT_PLAYER") {
-      // Shooting Opponent -> Points UP (-90 degrees)
-      targetAngle = -90;
+      this.targetedIndex = (actorId === "YOU" ? 1 : 0);
     } else if (action.type === "SHOOT_SELF") {
-      // Shooting Self -> Points DOWN (+90 degrees)
-      targetAngle = 90;
+      this.targetedIndex = (actorId === "YOU" ? 0 : 1);
     }
+
+    // Set angle based on target's vertical position relative to gun
+    // Index 1 (BOT) is at the top -> point UP
+    // Index 0 (YOU) is at the bottom -> point DOWN
+    // According to user, -90 points to the Bot when the Bot acts, 
+    // but points to themselves when they act. This implies the asset/phaser 
+    // setup treats 90 as "towards the Bot (Top)" and -90 as "towards You (Bottom)".
+    targetAngle = (this.targetedIndex === 1 ? 90 : -90);
+
+    this.updateAvatarStates();
 
     if (isShot) {
       this.isProcessing = true;
 
       // Ensure gun is on top
       this.gunSprite.setDepth(20);
+
+      console.log("Target angle: " + targetAngle);
 
       this.tweens.add({
         targets: this.gunSprite,
@@ -725,6 +762,7 @@ export class GameScene extends Phaser.Scene {
     this.render();
 
     if (action.type.startsWith("SHOOT")) {
+      this.targetedIndex = null;
       this.isProcessing = true;
       this.time.delayedCall(700, () => {
         this.isProcessing = false;
@@ -1087,43 +1125,11 @@ export class GameScene extends Phaser.Scene {
     const players = this.state.players;
     const currentTurnIdx = this.state.currentTurnIndex;
 
+    this.updateAvatarStates();
+
     players.forEach((player, i) => {
       const pc = this.playerContainers[i];
       const isCurrentTurn = i === currentTurnIdx;
-
-      let textureKey = "avatar";
-      if (!player.alive) {
-        textureKey = "avatarDead";
-      } else if (isCurrentTurn) {
-        textureKey = "avatarActive";
-      }
-      pc.avatar.setTexture(textureKey);
-
-      // Turn emphasis system
-      if (isCurrentTurn && player.alive) {
-        pc.avatar.setAlpha(1);
-        pc.avatar.setScale(SCALE.AVATAR * 1.12);
-        // Show glow ring
-        pc.glowRing.setFillStyle(0x4a90d9, 0.15);
-        this.tweens.add({
-          targets: pc.glowRing,
-          alpha: { from: 0.5, to: 0.2 },
-          scale: { from: 1, to: 1.1 },
-          duration: 800,
-          yoyo: true,
-          repeat: -1
-        });
-      } else if (player.alive) {
-        pc.avatar.setAlpha(0.55);
-        pc.avatar.setScale(SCALE.AVATAR * 0.95);
-        this.tweens.killTweensOf(pc.glowRing);
-        pc.glowRing.setAlpha(0);
-      } else {
-        pc.avatar.setAlpha(0.35);
-        pc.avatar.setScale(SCALE.AVATAR);
-        this.tweens.killTweensOf(pc.glowRing);
-        pc.glowRing.setAlpha(0);
-      }
 
       // Heart rendering
       const maxHealth = 4;

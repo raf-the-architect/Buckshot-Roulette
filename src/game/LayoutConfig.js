@@ -15,9 +15,15 @@ export const ASSETS = {
     CROSSED_REVOLVERS: "images/crossed-revolvers.png",
 
     // Avatars
-    AVATAR_BOT: "images/avatars/avatar-bot.png",
     AVATAR_PLAYER: "images/avatars/avatar-player.png",
-    AVATAR_DEAD: "images/avatars/avatar-dead.png",
+    AVATAR_PLAYER_ACTIVE: "images/avatars/avatar-active.png",
+    AVATAR_PLAYER_DEAD: "images/avatars/avatar-dead.png",
+    AVATAR_PLAYER_SELECTED: "images/avatars/avatar-selected.png",
+
+    AVATAR_BOT: "images/avatars/avatar-bot.png",
+    AVATAR_BOT_ACTIVE: "images/avatars/avatar-bot-active.png",
+    AVATAR_BOT_DEAD: "images/avatars/avatar-bot-dead.png",
+    AVATAR_BOT_SELECTED: "images/avatars/avatar-bot-selected.png",
 
     // UI Elements
     BTN_SHOOT_PLAYER_IDLE: "images/ui/shoot-player-idle.png",
@@ -44,8 +50,14 @@ export const ASSETS = {
 
 export const AVATAR_KEYS = {
     PLAYER: "avatarPlayer",
+    PLAYER_ACTIVE: "avatarPlayerActive",
+    PLAYER_DEAD: "avatarPlayerDead",
+    PLAYER_SELECTED: "avatarPlayerSelected",
+
     BOT: "avatarBot",
-    DEAD: "avatarDead"
+    BOT_ACTIVE: "avatarBotActive",
+    BOT_DEAD: "avatarBotDead",
+    BOT_SELECTED: "avatarBotSelected"
 };
 
 export const SOUNDS = {
@@ -71,23 +83,23 @@ export const LAYOUT = {
     WIDTH: 360,
     HEIGHT: 640,
     CENTER_X: 180,
-    TOP_ZONE: { y: 70 },
-    BOT_ITEMS_ZONE: { y: 135 },
-    GUN_ZONE: { y: 240 },
+    TOP_ZONE: { y: 50 },
+    BOT_ITEMS_ZONE: { y: 145 },
+    GUN_ZONE: { y: 260 },
     AMMO_ZONE: { y: 310 },
     NEXT_AMMO_ZONE: { y: 265 },
-    PLAYER_ITEMS_ZONE: { y: 390 },
+    PLAYER_ITEMS_ZONE: { y: 440 },
     BTN_ZONE: { y: 580 },
     BOTTOM_ZONE: { y: 500 }
 };
 
 export const SCALE = {
-    AVATAR: 0.5,
+    AVATAR: 0.25,
     GUN: 0.4,
     BUTTON: 0.5,
     AMMO: 0.20,
     HEART: 0.10,
-    ITEM: 0.10
+    ITEM: 0.15
 };
 
 // ============================================================================
