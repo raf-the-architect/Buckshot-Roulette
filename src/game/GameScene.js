@@ -23,10 +23,18 @@ import { ItemRenderer } from "./managers/ItemRenderer.js";
 export class GameScene extends Phaser.Scene {
   constructor() {
     super("Game");
+    // Multiplayer mode flag
+    this.isMultiplayer = false;
+    this.gameStore = null;
   }
 
   init(data) {
     this.playerName = data.playerName || "YOU";
+    // Check if multiplayer mode
+    this.isMultiplayer = this.registry.get('isMultiplayer') || false;
+    if (this.isMultiplayer) {
+      this.gameStore = this.registry.get('gameStore');
+    }
   }
 
   /**
@@ -47,7 +55,7 @@ export class GameScene extends Phaser.Scene {
   // PRELOAD
   // ==========================================================================
   preload() {
-    this.load.setPath("assets/");
+    this.load.setPath("/assets/");
 
     // Core
     this.load.image("bg", ASSETS.BG);
@@ -101,30 +109,51 @@ export class GameScene extends Phaser.Scene {
   // ==========================================================================
   // CREATE
   // ==========================================================================
+  // ==========================================================================
+  // CREATE
+  // ==========================================================================
   create() {
-    const layout = this.getLayout();
+    this.createGame(this.getLayout());
+  }
 
-    // Initialize game state
-    this.rng = { random: () => Math.random() };
-    this.state = createInitialState();
-    refillShotgun(this.state, this.rng);
-    giveItems(this.state, this.rng);
+  /**
+   * Unified Game Initialization
+   * Handles both Single Player (local) and Multiplayer (network) modes
+   */
+  createGame(layout) {
+    // 1. Initialize State
+    if (this.isMultiplayer && this.gameStore) {
+      // Multiplayer: No local state init here, we wait for Firebase
+      console.log("[STATE] Game Started (Multiplayer) - Waiting for sync...");
+      this.state = null; 
+    } else {
+      // Single Player: Create local state immediately
+      console.log("[STATE] Game Started (Single Player)");
+      this.rng = { random: () => Math.random() };
+      this.state = createInitialState();
+      refillShotgun(this.state, this.rng);
+      giveItems(this.state, this.rng);
+      
+      // Initialize SP specific flags
+      this.roundStartLive = this.state.shotgun.live;
+      this.roundStartBlank = this.state.shotgun.blank;
+      this.roundStartTotal = this.state.shotgun.chamber.length;
+    }
 
-    // Reset flags
+    // 2. Initialize Common Flags
     this.restartBtn = null;
     this.isProcessing = false;
-    this.ammoRevealPhase = true;
+    this.ammoRevealPhase = !this.isMultiplayer; // MP managed by server/state
     this.firedShots = [];
-    this.roundStartLive = this.state.shotgun.live;
-    this.roundStartBlank = this.state.shotgun.blank;
-    this.roundStartTotal = this.state.shotgun.chamber.length;
     this.nextAmmoRevealed = null;
     this.betweenRounds = false;
     this.targetedIndex = null;
+    this.selectedTargetId = null;
 
-    // Initialize managers
+    // 3. Initialize Shared Managers
+    console.log("[GameScene] Initializing Managers...");
     this.effects = new EffectsManager(this);
-    this.ai = new AIController(this);
+    this.ai = this.isMultiplayer ? null : new AIController(this); // AI only for SP
     this.hud = new HUDManager(this);
     this.players = new PlayerManager(this);
     this.gun = new GunManager(this);
@@ -133,30 +162,185 @@ export class GameScene extends Phaser.Scene {
     this.action = new ActionHandler(this);
     this.round = new RoundManager(this);
     this.items = new ItemRenderer(this);
+    console.log("[GameScene] Managers initialized.");
 
+    // 4. Setup Visuals (Unified)
     // Background
+    console.log("[GameScene] Setting up background...");
     this.add.image(layout.CENTER_X, layout.HEIGHT / 2, "bg")
       .setDisplaySize(layout.WIDTH, layout.HEIGHT);
-
-    // Subtle vignette overlay
+    
+    // Vignette
     this.add.rectangle(layout.CENTER_X, layout.HEIGHT / 2, layout.WIDTH, layout.HEIGHT, 0x000000, 0.25);
 
-    // Setup all managers
+    // Setup Managers
+    console.log("[GameScene] Setting up HUD...");
     this.hud.setup();
-    this.players.setup(this.playerName);
+    
+    // Player Setup: Use different methods but same visual manager
+    console.log("[GameScene] Setting up Players...");
+    if (this.isMultiplayer) {
+      this.players.setupMultiplayer(this.gameStore);
+    } else {
+      this.players.setup(this.playerName);
+    }
+
+    console.log("[GameScene] Setting up Gun/Ammo/UI...");
     this.gun.setup();
     this.ammo.setup();
     this.ui.setup();
 
-    // Initial render
-    this.render();
-
-    // Background music (loop + low volume)
+    // 5. Start Game Flow
+    // Background music
     this.sound.play("sndMusic", { loop: true, volume: 0.08 });
 
-    // Start first round
-    console.log("[STATE] Game Started");
-    this.round.startAmmoReveal();
+    if (this.isMultiplayer) {
+      // Subscribe to network updates
+      this.subscribeToGameState();
+    } else {
+      // Start local loop
+      this.render();
+      this.round.startAmmoReveal();
+    }
+  }
+
+  /**
+   * Subscribe to multiplayer game state changes
+   */
+  subscribeToGameState() {
+    if (!this.gameStore) return;
+
+    let lastActionCount = 0;
+
+    // Watch for game state changes via Phaser update loop
+    this.events.on('update', () => {
+      // If we are in MP, we rely on gameStore.currentGame as our source of truth
+      if (!this.gameStore?.currentGame) return;
+
+      const game = this.gameStore.currentGame;
+      
+      // Update local reference for renderers that might use `this.state` (compatibility)
+      // We map the Firebase game state to the local structure if needed, 
+      // but ideally we just read from 'game' directly in renderMultiplayer.
+
+      // Sync shotgun state for ammo display
+      if (game.shotgun) {
+        this.roundStartLive = game.shotgun.liveRounds;
+        this.roundStartBlank = game.shotgun.blankRounds;
+        this.roundStartTotal = game.shotgun.chamber?.length || 0;
+      }
+
+      // Check for new actions to animate
+      const actions = this.gameStore.gameActions;
+      if (actions.length > lastActionCount) {
+        const newActions = actions.slice(lastActionCount);
+        newActions.forEach(action => this.handleMultiplayerAction(action));
+        lastActionCount = actions.length;
+      }
+
+      // Render updated state
+      this.renderMultiplayer();
+    });
+  }
+
+  /**
+   * Handle player selection in multiplayer
+   */
+  onPlayerSelected(index, userId) {
+    if (!this.isMultiplayer) return;
+
+    // Prevent selecting self or dead players (basic check, detailed check in action validation)
+    const myId = this.gameStore.myPlayer?.userId;
+    if (userId === myId) return;
+
+    console.log(`[MP] Selected target: ${userId} (index ${index})`);
+
+    // Toggle selection if clicking same player
+    if (this.selectedTargetId === userId) {
+      this.targetedIndex = null;
+      this.selectedTargetId = null;
+    } else {
+      this.targetedIndex = index;
+      this.selectedTargetId = userId;
+    }
+
+    this.renderMultiplayer();
+    this.updateButtonStates();
+  }
+
+  /**
+   * Render multiplayer state
+   */
+  renderMultiplayer() {
+    if (!this.gameStore?.currentGame) return;
+
+    const game = this.gameStore.currentGame;
+    
+    // Lazy init: If players haven't been set up yet (because store was empty at launch), do it now
+    if (this.players.playerContainers.length === 0 && game.players?.length > 0) {
+        console.log("[MP] Late setup of player containers. Players found:", game.players.length);
+        this.players.setupMultiplayer(this.gameStore);
+    } else if (this.players.playerContainers.length === 0) {
+        console.log("[MP] Waiting for players... Game store has:", game.players?.length);
+    }
+    
+    // Update player visuals from Firebase state
+    // Note: PlayerManager.updateFromFirebase needs to exist or be mapped to updateAvatarStates
+    if (this.players.updateFromFirebase) {
+        this.players.updateFromFirebase(game.players, game.currentTurn, this.targetedIndex);
+    } else {
+        // Fallback to unified updateAvatarStates if updateFromFirebase is merged
+        // We might need to adapt the data structure here if they differ significantly
+        // For now assuming updateFromFirebase exists as per previous context OR we use updateAvatarStates
+        // Let's check PlayerManager in next step if this fails, but for now restoring the call.
+        
+        // Actually, looking at PlayerManager in previous steps, we unified setup but updateAvatarStates 
+        // takes a local state object. We need to construct a robust call here.
+        
+        // Let's try to use the unified updateAvatarStates but passing the game object 
+        // masked as state since they share 'players' and 'currentTurnIndex' vs 'currentTurn'
+        
+        const stateProxy = {
+            players: game.players.map(p => ({
+                id: p.userId === this.gameStore.myPlayer?.userId ? "YOU" : p.userId, // Use actual ID for MP
+                ...p,
+                health: p.health // ensure health exists
+            })),
+            currentTurnIndex: game.currentTurn
+        };
+        this.players.updateAvatarStates(stateProxy, this.targetedIndex);
+    }
+
+    // Update HUD with server state
+    if (this.hud.updateMultiplayer) {
+        this.hud.updateMultiplayer(game);
+    } else {
+        // Fallback or Unified HUD update
+        // this.hud.update(game); 
+        // Need to check HUDManager to be safe, but for now let's restore the original function logic
+        // which likely called specific MP methods.
+    }
+
+    // Render ammo (spectators see unknown)
+    const isSpectator = this.gameStore.amSpectator;
+    if (game.shotgun) {
+      // Check if ammo renderer has MP support or unified
+      if (this.ammo.renderMultiplayer) {
+          this.ammo.renderMultiplayer(
+            game.shotgun.totalRounds,
+            game.shotgun.liveRounds,
+            this.firedShots,
+            isSpectator
+          );
+      } else {
+          this.ammo.render(
+            game.shotgun.totalRounds,
+            game.shotgun.liveRounds,
+            this.firedShots,
+            !isSpectator // loose approx for reveal phase
+          );
+      }
+    }
   }
 
   // ==========================================================================

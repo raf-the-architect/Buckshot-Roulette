@@ -49,8 +49,20 @@ export class UIManager {
 
         this.btnShootBot.setScale(finalScale);
 
-        this.setupButtonFeedback(this.btnShootBot, "btnShootPlayer", finalScale, () =>
-            this.scene.onPlayerAction({ type: "SHOOT_PLAYER", playerId: "YOU", targetId: "BOT" }));
+        this.setupButtonFeedback(this.btnShootBot, "btnShootPlayer", finalScale, () => {
+             const targetId = this.scene.isMultiplayer 
+                 ? (this.scene.selectedTargetId || (this.scene.gameStore?.currentGame?.players.length === 2 ? this.scene.gameStore.currentGame.players.find(p => p.userId !== "YOU" && p.userId !== this.scene.gameStore.myPlayer?.userId)?.userId : null)) 
+                 : "BOT";
+            
+             // Fallback for 2-player MP if explicit selection skipped 
+             // (Assuming index 1 is opponent or find checking userId)
+             let finalTarget = targetId;
+             if (this.scene.isMultiplayer && !finalTarget && this.scene.gameStore?.currentGame?.players.length === 2) {
+                 finalTarget = this.scene.gameStore.currentGame.players.find(p => p.userId !== this.scene.gameStore.myPlayer?.userId)?.userId;
+             }
+
+             this.scene.onPlayerAction({ type: "SHOOT_PLAYER", playerId: "YOU", targetId: finalTarget });
+        });
 
         // Shoot Self (Right)
         this.btnShootSelf = this.scene.add.image(margin + btnWidth + gap + btnWidth / 2, btnY, "btnShootSelfIdle")
@@ -69,17 +81,19 @@ export class UIManager {
     }
 
     /**
-     * Set up button feedback with press/release animations
+     * Set up button feedback with restricted input
      */
     setupButtonFeedback(button, baseKey, baseScale, callback) {
         button.setInteractive({ useHandCursor: true });
 
         button.on("pointerdown", () => {
+            if (button.alpha < 1) return; // Disabled check
             button.setTexture(baseKey + "Pressed");
             callback();
         });
 
         button.on("pointerup", () => {
+            if (button.alpha < 1) return;
             button.setTexture(baseKey + "Idle");
         });
 
@@ -92,27 +106,41 @@ export class UIManager {
      * Update button states based on game state
      */
     updateButtonStates(state, isProcessing, ammoRevealPhase, betweenRounds) {
-        const isPlayerTurn = state.players[state.currentTurnIndex].id === "YOU";
+        const isPlayerTurn = state.players[state.currentTurnIndex].id === "YOU" || state.players[state.currentTurnIndex].userId === this.scene.gameStore?.myPlayer?.userId; // Handle MP ID check
         const canAct = isPlayerTurn && !isProcessing && !state.gameOver && !ammoRevealPhase && !betweenRounds;
 
-        if (canAct) {
+        let canShootPlayer = canAct;
+        
+        // Multiplayer Target Validation
+        if (this.scene.isMultiplayer && canAct) {
+             const playerCount = state.players.length;
+             if (playerCount > 2 && !this.scene.selectedTargetId) {
+                 canShootPlayer = false;
+             }
+        }
+
+        if (canShootPlayer) {
             this.btnShootBot.setInteractive({ useHandCursor: true });
-            this.btnShootSelf.setInteractive({ useHandCursor: true });
             this.btnShootBot.setTexture("btnShootPlayerIdle");
-            this.btnShootSelf.setTexture("btnShootSelfIdle");
             this.btnShootBot.clearTint();
-            this.btnShootSelf.clearTint();
             this.btnShootBot.setAlpha(1);
-            this.btnShootSelf.setAlpha(1);
         } else {
             this.btnShootBot.disableInteractive();
-            this.btnShootSelf.disableInteractive();
             this.btnShootBot.setTexture("btnShootPlayerDisabled");
-            this.btnShootSelf.setTexture("btnShootSelfDisabled");
             this.btnShootBot.clearTint();
+            this.btnShootBot.setAlpha(0.5); // Visual feedback for disabled
+        }
+
+        if (canAct) {
+            this.btnShootSelf.setInteractive({ useHandCursor: true });
+            this.btnShootSelf.setTexture("btnShootSelfIdle");
             this.btnShootSelf.clearTint();
-            this.btnShootBot.setAlpha(1);
             this.btnShootSelf.setAlpha(1);
+        } else {
+            this.btnShootSelf.disableInteractive();
+            this.btnShootSelf.setTexture("btnShootSelfDisabled");
+            this.btnShootSelf.clearTint();
+            this.btnShootSelf.setAlpha(0.5);
         }
     }
 
