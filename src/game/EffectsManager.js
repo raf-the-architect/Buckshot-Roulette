@@ -3,7 +3,7 @@
  * Handles all visual effects: shoot, damage, heal, item effects
  */
 
-import { LAYOUT, SCALE, ITEM_ASSET_MAP } from "./LayoutConfig.js";
+import { ITEM_ASSET_MAP } from "./LayoutConfig.js";
 import { ITEM_KEYS } from "./gameLogic.js";
 
 export class EffectsManager {
@@ -11,10 +11,26 @@ export class EffectsManager {
         this.scene = scene;
     }
 
+    /**
+     * Get current layout dynamically from scene
+     */
+    getLayout() {
+        return this.scene.getLayout();
+    }
+
+    /**
+     * Get current scale dynamically from scene
+     */
+    getScale() {
+        return this.scene.getScale();
+    }
+
     // ==========================================================================
     // EFFECT PRIORITY SYSTEM
     // ==========================================================================
     triggerEffect(type, params) {
+        const layout = this.getLayout();
+
         if (type === "shake") {
             if (this.scene.isShaking) return;
             this.scene.isShaking = true;
@@ -22,8 +38,8 @@ export class EffectsManager {
             this.scene.time.delayedCall(params.duration || 120, () => this.scene.isShaking = false);
         } else if (type === "flash") {
             const flash = this.scene.add.rectangle(
-                LAYOUT.CENTER_X, LAYOUT.HEIGHT / 2,
-                LAYOUT.WIDTH, LAYOUT.HEIGHT,
+                layout.CENTER_X, layout.HEIGHT / 2,
+                layout.WIDTH, layout.HEIGHT,
                 params.color || 0xffffff, params.alpha || 0.4
             ).setDepth(1000);
             this.scene.tweens.add({
@@ -39,8 +55,11 @@ export class EffectsManager {
     // SHOOT EFFECTS
     // ==========================================================================
     playShootEffect(wasLive, action) {
+        const layout = this.getLayout();
+        const gunSprite = this.scene.gunSprite;
+
         if (wasLive) {
-            const flash = this.scene.add.circle(LAYOUT.CENTER_X, LAYOUT.GUN_ZONE.y, 35, 0xffcc00, 1);
+            const flash = this.scene.add.circle(layout.CENTER_X, layout.GUN_ZONE.y, 35, 0xffcc00, 1);
             this.scene.tweens.add({
                 targets: flash,
                 scale: { from: 0.3, to: 1.4 },
@@ -52,8 +71,8 @@ export class EffectsManager {
             this.triggerEffect("shake", { duration: 120, intensity: 0.006 });
 
             this.scene.tweens.add({
-                targets: this.scene.gunSprite,
-                angle: { from: this.scene.gunSprite.angle - 8, to: this.scene.gunSprite.angle },
+                targets: gunSprite,
+                angle: { from: gunSprite.angle - 8, to: gunSprite.angle },
                 duration: 180,
                 ease: 'Back.easeOut'
             });
@@ -61,20 +80,20 @@ export class EffectsManager {
             this.triggerEffect("flash", { color: 0xc62828, alpha: 0.2, duration: 250 });
         } else {
             // Dry fire - softer effect
-            const puff = this.scene.add.circle(LAYOUT.CENTER_X, LAYOUT.GUN_ZONE.y - 12, 12, 0x4a90d9, 0.5);
+            const puff = this.scene.add.circle(layout.CENTER_X, layout.GUN_ZONE.y - 12, 12, 0x4a90d9, 0.5);
             this.scene.tweens.add({
                 targets: puff,
                 scale: { from: 0.5, to: 1.8 },
                 alpha: 0,
-                y: LAYOUT.GUN_ZONE.y - 35,
+                y: layout.GUN_ZONE.y - 35,
                 duration: 320,
                 onComplete: () => puff.destroy()
             });
 
             // Subtle wobble
             this.scene.tweens.add({
-                targets: this.scene.gunSprite,
-                angle: { from: this.scene.gunSprite.angle - 2, to: this.scene.gunSprite.angle + 2 },
+                targets: gunSprite,
+                angle: { from: gunSprite.angle - 2, to: gunSprite.angle + 2 },
                 duration: 60,
                 yoyo: true,
                 repeat: 1
@@ -86,6 +105,7 @@ export class EffectsManager {
     // DAMAGE EFFECT
     // ==========================================================================
     playDamageEffect(playerIndex) {
+        const scale = this.getScale();
         const pc = this.scene.playerContainers[playerIndex];
 
         pc.avatar.setTint(0xc62828);
@@ -102,7 +122,7 @@ export class EffectsManager {
                 this.scene.tweens.add({
                     targets: targetHeart,
                     y: targetHeart.y - 12,
-                    scale: SCALE.HEART * 1.4,
+                    scale: scale.HEART * 1.4,
                     alpha: 0,
                     duration: 280,
                     ease: 'Back.easeIn',
@@ -110,7 +130,7 @@ export class EffectsManager {
                         targetHeart.setTexture("heartEmpty");
                         targetHeart.y = 0;
                         targetHeart.alpha = 0.4;
-                        targetHeart.setScale(SCALE.HEART);
+                        targetHeart.setScale(scale.HEART);
                     }
                 });
             }
@@ -121,13 +141,14 @@ export class EffectsManager {
     // ITEM EFFECTS
     // ==========================================================================
     playItemEffect(itemKey, actorId) {
+        const layout = this.getLayout();
         const isBot = actorId === "BOT";
-        const baseY = isBot ? LAYOUT.BOT_ITEMS_ZONE.y : LAYOUT.PLAYER_ITEMS_ZONE.y;
+        const baseY = isBot ? layout.BOT_ITEMS_ZONE.y : layout.PLAYER_ITEMS_ZONE.y;
 
         const color = this.getItemColor(itemKey);
         for (let i = 0; i < 5; i++) {
             const sparkle = this.scene.add.circle(
-                LAYOUT.CENTER_X + Phaser.Math.Between(-35, 35),
+                layout.CENTER_X + Phaser.Math.Between(-35, 35),
                 baseY + Phaser.Math.Between(-15, 15),
                 4,
                 color,
@@ -146,12 +167,13 @@ export class EffectsManager {
     }
 
     playBeerEffect(wasLive) {
+        const layout = this.getLayout();
         const color = wasLive ? 0xc62828 : 0x4a90d9;
-        const eject = this.scene.add.circle(LAYOUT.CENTER_X + 28, LAYOUT.GUN_ZONE.y, 7, color, 0.9);
+        const eject = this.scene.add.circle(layout.CENTER_X + 28, layout.GUN_ZONE.y, 7, color, 0.9);
         this.scene.tweens.add({
             targets: eject,
-            x: LAYOUT.CENTER_X + 90,
-            y: LAYOUT.GUN_ZONE.y + 45,
+            x: layout.CENTER_X + 90,
+            y: layout.GUN_ZONE.y + 45,
             rotation: 2.5,
             alpha: 0,
             duration: 450,
@@ -210,25 +232,30 @@ export class EffectsManager {
     }
 
     playKnifeEffect() {
-        this.scene.crossedRevolversSprite.setVisible(true);
-        this.scene.crossedRevolversSprite.setAlpha(0);
-        this.scene.crossedRevolversSprite.setScale(SCALE.GUN);
+        const layout = this.getLayout();
+        const scale = this.getScale();
+        const crossedRevolversSprite = this.scene.crossedRevolversSprite;
+        const gunSprite = this.scene.gunSprite;
 
-        this.scene.gunSprite.setVisible(false);
+        crossedRevolversSprite.setVisible(true);
+        crossedRevolversSprite.setAlpha(0);
+        crossedRevolversSprite.setScale(scale.GUN);
+
+        gunSprite.setVisible(false);
 
         this.scene.tweens.add({
-            targets: this.scene.crossedRevolversSprite,
+            targets: crossedRevolversSprite,
             alpha: 1,
-            scale: SCALE.GUN,
+            scale: scale.GUN,
             duration: 280,
             ease: 'Back.easeOut'
         });
 
-        const slash = this.scene.add.rectangle(LAYOUT.CENTER_X - 18, LAYOUT.GUN_ZONE.y, 55, 3, 0xc62828, 1)
+        const slash = this.scene.add.rectangle(layout.CENTER_X - 18, layout.GUN_ZONE.y, 55, 3, 0xc62828, 1)
             .setAngle(-45);
         this.scene.tweens.add({
             targets: slash,
-            x: LAYOUT.CENTER_X + 18,
+            x: layout.CENTER_X + 18,
             alpha: 0,
             duration: 180,
             onComplete: () => slash.destroy()

@@ -107,11 +107,19 @@ const app = createApp({
          * Creates Phaser instance
          */
         function createPhaser(name) {
+            // Detect if landscape orientation
+            const isLandscape = window.innerWidth > window.innerHeight;
+
             const config = {
                 type: Phaser.AUTO,
-                width: 360,
-                height: 640,
-                backgroundColor: '#000',
+                scale: {
+                    mode: isLandscape ? Phaser.Scale.HEIGHT_CONTROLS_WIDTH : Phaser.Scale.EXPAND,
+                    autoCenter: Phaser.Scale.CENTER_BOTH,
+                    width: 360,
+                    height: 640
+                },
+                backgroundColor: 'transparent',
+                transparent: true,
                 parent: 'phaser-container',
                 scene: [GameScene]
             };

@@ -4,11 +4,17 @@
  */
 
 import { decideAIAction } from "./ai.js";
-import { SCALE } from "./LayoutConfig.js";
 
 export class AIController {
     constructor(scene) {
         this.scene = scene;
+    }
+
+    /**
+     * Get current scale dynamically from scene
+     */
+    getScale() {
+        return this.scene.getScale();
     }
 
     // ==========================================================================
@@ -58,11 +64,12 @@ export class AIController {
     // THINKING INDICATOR
     // ==========================================================================
     showThinkingIndicator(show) {
+        const scale = this.getScale();
         const pc = this.scene.playerContainers[1]; // BOT
         if (show) {
             this.scene.tweens.add({
                 targets: pc.avatar,
-                scale: SCALE.AVATAR * 1.08,
+                scale: scale.AVATAR * 1.08,
                 alpha: 0.85,
                 duration: 350,
                 yoyo: true,
@@ -70,7 +77,7 @@ export class AIController {
             });
         } else {
             this.scene.tweens.killTweensOf(pc.avatar);
-            pc.avatar.setScale(SCALE.AVATAR);
+            pc.avatar.setScale(scale.AVATAR);
             pc.avatar.setAlpha(1);
         }
     }

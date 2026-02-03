@@ -33,3 +33,59 @@ body {
     background-color: #000;
     /* Game background is black, UI sits on top */
 }
+
+/* Blurred background for landscape mode */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-image: url('../assets/images/background.png');
+    background-size: cover;
+    background-position: center;
+    filter: blur(20px) brightness(0.4);
+    transform: scale(1.1);
+    /* Prevent blur edge artifacts */
+    z-index: -1;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+/* Show blurred background only in landscape */
+@media (orientation: landscape) {
+    body::before {
+        opacity: 1;
+    }
+}
+
+/* Ensure Phaser fills the entire screen */
+#phaser-container {
+    width: 100vw;
+    height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Portrait: fill entire screen */
+@media (orientation: portrait) {
+    #phaser-container canvas {
+        width: 100% !important;
+        height: 100% !important;
+    }
+}
+
+/* Landscape: preserve aspect ratio, center canvas */
+@media (orientation: landscape) {
+    #phaser-container canvas {
+        width: auto !important;
+        height: 100% !important;
+        max-width: 100%;
+        box-shadow: 0 0 60px rgba(0, 0, 0, 0.8);
+    }
+}
