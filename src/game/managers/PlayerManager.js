@@ -242,7 +242,7 @@ export class PlayerManager {
                 const isFull = h < player.health;
                 const targetTexture = isFull ? "heartFull" : "heartEmpty";
                 if (heart.texture.key !== targetTexture) heart.setTexture(targetTexture);
-                heart.setAlpha(isCurrentTurn ? (isFull ? 1 : 0.35) : (isFull ? 0.5 : 0.18));
+                heart.setAlpha(isCurrentTurn ? 1 : 0.5);
             });
         });
     }

@@ -13,6 +13,7 @@ export class HUDManager {
         this.turnBg = null;
         this.turnPanel = null;
         this.turnGlow = null;
+        this.lastTurnBorderHex = null;
     }
 
     /**
@@ -68,6 +69,19 @@ export class HUDManager {
     }
 
     /**
+     * Apply turn panel border/text color without requiring turn text changes.
+     */
+    applyTurnPanelStyle(turnColor, turnColorHex) {
+        this.hudTurn.setColor(turnColor);
+        this.turnBg.clear();
+        this.turnBg.fillStyle(COLORS.PANEL_BG, 0.95);
+        this.turnBg.lineStyle(1, turnColorHex);
+        this.turnBg.fillRoundedRect(-60, -16, 120, 32, 8);
+        this.turnBg.strokeRoundedRect(-60, -16, 120, 32, 8);
+        this.lastTurnBorderHex = turnColorHex;
+    }
+
+    /**
      * Update HUD with current game state
      */
     update(state) {
@@ -100,22 +114,25 @@ export class HUDManager {
                 : (this.scene.isMultiplayer ? "Opponent Turn" : "Dealer's Turn");
             const turnColor = isMyTurn ? COLORS.SUCCESS : COLORS.DANGER;
             const turnColorHex = isMyTurn ? 0x43a047 : 0xc62828;
+            const textChanged = this.hudTurn.text !== turnName;
+            const borderChanged = this.lastTurnBorderHex !== turnColorHex;
 
-            if (this.hudTurn.text !== turnName) {
+            if (!textChanged) {
+                if (borderChanged) {
+                    this.applyTurnPanelStyle(turnColor, turnColorHex);
+                } else {
+                    this.hudTurn.setColor(turnColor);
+                }
+            }
+
+            if (textChanged) {
                 this.scene.tweens.add({
                     targets: [this.hudTurn, this.turnBg],
                     alpha: { from: 1, to: 0 },
                     duration: 120,
                     onComplete: () => {
                         this.hudTurn.setText(turnName);
-                        this.hudTurn.setColor(turnColor);
-
-                        // Update Graphics Stroke
-                        this.turnBg.clear();
-                        this.turnBg.fillStyle(COLORS.PANEL_BG, 0.95);
-                        this.turnBg.lineStyle(1, turnColorHex);
-                        this.turnBg.fillRoundedRect(-60, -16, 120, 32, 8);
-                        this.turnBg.strokeRoundedRect(-60, -16, 120, 32, 8);
+                        this.applyTurnPanelStyle(turnColor, turnColorHex);
 
                         this.scene.tweens.add({
                             targets: [this.hudTurn, this.turnBg],

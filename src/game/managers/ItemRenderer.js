@@ -30,7 +30,7 @@ export class ItemRenderer {
             const tx = startX + col * itemSpacing;
             const ty = row * 42;
 
-            const maxDim = 32;
+            const maxDim = 38;
             const icon = this.scene.imageService.createImage(tx, ty, assetKey);
             const scale = this.scene.imageService.setScaleFromMaxDimension(icon, maxDim, { allowUpscale: true });
 

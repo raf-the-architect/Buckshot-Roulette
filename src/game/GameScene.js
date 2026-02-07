@@ -58,6 +58,9 @@ export class GameScene extends Phaser.Scene {
     this.isPlayingMultiplayerAction = false;
     this.currentMatchId = null;
     this.lastStateVersion = -1;
+    this.bgImage = null;
+    this.bgShade = null;
+    this.resizeHandler = null;
   }
 
   /**
@@ -257,11 +260,10 @@ export class GameScene extends Phaser.Scene {
     this.items = new ItemRenderer(this);
     logger.debug('managers_init_complete');
 
-    this.imageService.createImage(layout.CENTER_X, layout.HEIGHT / 2, 'bg', {
-      displayWidth: layout.WIDTH,
-      displayHeight: layout.HEIGHT
-    });
-    this.add.rectangle(layout.CENTER_X, layout.HEIGHT / 2, layout.WIDTH, layout.HEIGHT, 0x000000, 0.25);
+    this.bgImage = this.imageService.createImage(layout.CENTER_X, layout.HEIGHT / 2, 'bg');
+    this.bgShade = this.add.rectangle(layout.CENTER_X, layout.HEIGHT / 2, layout.WIDTH, layout.HEIGHT, 0x000000, 0.25);
+    this.applyBackgroundCover(layout.WIDTH, layout.HEIGHT);
+    this.registerResizeHandler();
 
     this.hud.setup();
 
@@ -299,6 +301,52 @@ export class GameScene extends Phaser.Scene {
       this.render();
       this.round.startAmmoReveal();
     }
+  }
+
+  /**
+   * Scale background image in "cover" mode to remove letterboxing on any viewport.
+   * @param {number} width - Canvas width.
+   * @param {number} height - Canvas height.
+   */
+  applyBackgroundCover(width, height) {
+    if (!this.bgImage) return;
+
+    const texture = this.textures.get('bg');
+    const source = texture?.getSourceImage?.();
+    const sourceWidth = source?.width || this.bgImage.width || width;
+    const sourceHeight = source?.height || this.bgImage.height || height;
+    const coverScale = Math.max(width / sourceWidth, height / sourceHeight);
+
+    this.bgImage.setPosition(width / 2, height / 2);
+    this.bgImage.setDisplaySize(sourceWidth * coverScale, sourceHeight * coverScale);
+
+    if (this.bgShade) {
+      this.bgShade.setPosition(width / 2, height / 2);
+      this.bgShade.setSize(width, height);
+    }
+  }
+
+  /**
+   * Keep the background cover sizing in sync with runtime Phaser resize events.
+   */
+  registerResizeHandler() {
+    if (this.resizeHandler) {
+      this.scale.off('resize', this.resizeHandler, this);
+    }
+
+    this.resizeHandler = (gameSize) => {
+      const width = gameSize?.width || this.scale.width;
+      const height = gameSize?.height || this.scale.height;
+      this.applyBackgroundCover(width, height);
+    };
+
+    this.scale.on('resize', this.resizeHandler, this);
+    this.events.once('shutdown', () => {
+      if (this.resizeHandler) {
+        this.scale.off('resize', this.resizeHandler, this);
+        this.resizeHandler = null;
+      }
+    });
   }
 
   /**
