@@ -244,14 +244,15 @@ export function validateActionIntent(state, action, playerId) {
 // =========================================================================
 
 export function refillShotgun(state, rng) {
-  const playerCount = state.players.filter(p => p.alive).length;
-  
-  // Scale rounds based on alive players
-  const minRounds = Math.max(2, playerCount);
-  const maxExtraRounds = Math.min(3, Math.ceil(playerCount / 2));
-  
-  const live = Math.floor(rng.random() * maxExtraRounds) + Math.ceil(minRounds / 2);
-  const blank = Math.floor(rng.random() * maxExtraRounds) + Math.floor(minRounds / 2);
+  const nextRoundNumber = (state.roundNumber || 0) + 1;
+
+  // Align offline round profile with multiplayer pacing while keeping random chamber order.
+  const live = nextRoundNumber === 1
+    ? 2
+    : Math.min(nextRoundNumber + 1, 4);
+  const blank = nextRoundNumber === 1
+    ? 4
+    : Math.min(nextRoundNumber + 2, 5);
   
   let rounds = [];
   for (let i = 0; i < live; i++) rounds.push(true);
@@ -269,7 +270,7 @@ export function refillShotgun(state, rng) {
   state.shotgun.nextRoundRevealed = false;
   state.shotgun.revealedRoundInfo = null;
   state.shotgun.isInverted = false;
-  state.roundNumber = (state.roundNumber || 0) + 1;
+  state.roundNumber = nextRoundNumber;
   
   state.logs.push(`🎰 Round ${state.roundNumber}: Loaded ${live} 🔴 Live, ${blank} ⚪ Blank.`);
 }

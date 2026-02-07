@@ -531,7 +531,8 @@ export const useGameStore = defineStore('game', () => {
                 lastActionAt: new Date().toISOString()
             }));
 
-            const players = distributeItemsInMemory(basePlayers, 1);
+            // Round 1 starts with no items for all players.
+            const players = basePlayers;
             const shotgun = generateShotgun(2, 4);
             const matchId = generateMatchId();
 

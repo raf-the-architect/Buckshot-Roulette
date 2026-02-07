@@ -3,7 +3,7 @@
  * Main gameplay scene orchestrating local rendering and multiplayer synchronization.
  */
 
-import { createInitialState, refillShotgun, giveItems, ITEM_KEYS } from './gameLogic.js';
+import { createInitialState, refillShotgun, ITEM_KEYS } from './gameLogic.js';
 import { ASSETS, SOUNDS, AVATAR_KEYS } from './LayoutConfig.js';
 import { getLayout, getScale } from './ResponsiveLayout.js';
 import { useAuthStore } from '@/stores/authStore';
@@ -226,7 +226,6 @@ export class GameScene extends Phaser.Scene {
       this.rng = { random: () => Math.random() };
       this.state = createInitialState();
       refillShotgun(this.state, this.rng);
-      giveItems(this.state, this.rng);
 
       this.roundStartLive = this.state.shotgun.live;
       this.roundStartBlank = this.state.shotgun.blank;
