@@ -1,0 +1,20 @@
+{
+  "name": "buckshot-roulette-functions",
+  "version": "1.0.0",
+  "description": "Firebase Cloud Functions for Buckshot Roulette multiplayer",
+  "main": "index.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "dependencies": {
+    "firebase-admin": "^11.11.1",
+    "firebase-functions": "^4.5.0"
+  },
+  "private": true
+}

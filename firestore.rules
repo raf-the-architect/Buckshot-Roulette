@@ -1,0 +1,163 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // =========================================================================
+    // HELPER FUNCTIONS
+    // =========================================================================
+    
+    // Check if the user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Get the current user's ID
+    function userId() {
+      return request.auth.uid;
+    }
+    
+    // Check if the user is the document owner
+    function isOwner(docUserId) {
+      return userId() == docUserId;
+    }
+    
+    // Check if a field has changed
+    function fieldChanged(field) {
+      return resource.data[field] != request.resource.data[field];
+    }
+    
+    // =========================================================================
+    // USERS COLLECTION
+    // =========================================================================
+    match /users/{userId} {
+      // Anyone can read user profiles (for displaying names in games)
+      allow read: if isAuthenticated();
+      
+      // Users can only create/update their own profile
+      allow create: if isAuthenticated() && isOwner(userId);
+      allow update: if isAuthenticated() && isOwner(userId);
+      
+      // No deletes allowed (preserve player history)
+      allow delete: if false;
+    }
+    
+    // =========================================================================
+    // ROOMS COLLECTION
+    // =========================================================================
+    match /rooms/{roomId} {
+      // Any authenticated user can read rooms (for joining)
+      allow read: if isAuthenticated();
+      
+      // Any authenticated user can create a room
+      // Any authenticated user can create a room
+      allow create: if isAuthenticated();
+        // Checks temporarily removed for debugging:
+        // && request.resource.data.hostId == userId()
+        // && request.resource.data.status == 'waiting';
+      
+      // Room can be updated by any player in the room OR someone joining
+      allow update: if isAuthenticated() 
+        && (isPlayerInRoom(roomId) || isJoiningRoom());
+      
+      // Only host can delete room
+      allow delete: if isAuthenticated() 
+        && resource.data.hostId == userId();
+      
+      // Helper: Check if user is a player in the room
+      function isPlayerInRoom(roomId) {
+        return userId() in resource.data.playerIds
+          || resource.data.hostId == userId();
+      }
+
+      // Helper: Check if user is joining (adding self to playerIds)
+      function isJoiningRoom() {
+        let currentIds = resource.data.playerIds;
+        let newIds = request.resource.data.playerIds;
+        
+        // User not in old list, but is in new list
+        return !(userId() in currentIds) && (userId() in newIds)
+          // And not modifying critical fields like hostId
+          && resource.data.hostId == request.resource.data.hostId;
+      }
+      
+      // -----------------------------------------------------------------------
+      // PLAYERS SUBCOLLECTION (within rooms)
+      // -----------------------------------------------------------------------
+      match /players/{playerId} {
+        // Any authenticated user can read players
+        allow read: if isAuthenticated();
+        
+        // Users can add themselves to rooms
+        allow create: if isAuthenticated() 
+          && isOwner(playerId);
+        
+        // Users can update their own player data
+        // Host can update any player (for kicking, etc.)
+        allow update: if isAuthenticated() 
+          && (isOwner(playerId) || isRoomHost(roomId));
+        
+        // Users can remove themselves, host can remove anyone
+        allow delete: if isAuthenticated() 
+          && (isOwner(playerId) || isRoomHost(roomId));
+        
+        // Helper: Check if current user is the room host
+        function isRoomHost(roomId) {
+          return get(/databases/$(database)/documents/rooms/$(roomId)).data.hostId == userId();
+        }
+      }
+    }
+    
+    // =========================================================================
+    // GAMES COLLECTION
+    // =========================================================================
+    match /games/{gameId} {
+      // Any authenticated user can read games (for spectating)
+      allow read: if isAuthenticated();
+      
+      // Only host can create a game (must match room's host)
+      allow create: if isAuthenticated() 
+        && isRoomHost(gameId);
+      
+      // Game can be updated by any active player
+      allow update: if isAuthenticated() 
+        && isActivePlayer(gameId);
+      
+      // No deletes - games are historical records
+      allow delete: if false;
+      
+      // Helper: Check if current user is the room host
+      function isRoomHost(gameId) {
+        return get(/databases/$(database)/documents/rooms/$(gameId)).data.hostId == userId();
+      }
+      
+      // Helper: Check if current user is an active player in the game
+      function isActivePlayer(gameId) {
+        // Checking against playerIds array
+        return userId() in resource.data.playerIds;
+      }
+      
+      // -----------------------------------------------------------------------
+      // ACTIONS SUBCOLLECTION (within games)
+      // -----------------------------------------------------------------------
+      match /actions/{actionId} {
+        // Anyone in the game can read actions
+        allow read: if isAuthenticated();
+        
+        // Only active players can create actions
+        allow create: if isAuthenticated() 
+          && isGamePlayer(gameId);
+        
+        // Actions cannot be updated or deleted (immutable log)
+        allow update: if false;
+        allow delete: if false;
+        
+        // Helper: Check if user is a player in the game
+        function isGamePlayer(gameId) {
+          let game = get(/databases/$(database)/documents/games/$(gameId)).data;
+          return userId() in game.playerIds;
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "Buckshot Roulette",
+  "short_name": "Buckshot",
+  "description": "Buckshot Roulette multiplayer and offline mode.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d1222",
+  "theme_color": "#111827",
+  "icons": [
+    {
+      "src": "/assets/images/avatars/avatar-player.png",
+      "type": "image/png",
+      "sizes": "any",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/images/avatars/avatar-player.png",
+      "type": "image/png",
+      "sizes": "any",
+      "purpose": "maskable"
+    }
+  ]
+}

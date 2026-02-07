@@ -3,6 +3,11 @@
  * Manages round flow, ammo reveal, and reload timeouts
  */
 
+import { createLogger } from "@/utils/logger";
+
+const logger = createLogger("RoundManager");
+const BETWEEN_ROUND_TIMEOUT_MS = 1000;
+
 export class RoundManager {
     constructor(scene) {
         this.scene = scene;
@@ -20,6 +25,11 @@ export class RoundManager {
      */
     startAmmoReveal() {
         const scene = this.scene;
+        const isMultiplayer = !!scene.isMultiplayer;
+
+        if (isMultiplayer && scene.gameStore?.setClientRevealPhaseActive) {
+            scene.gameStore.setClientRevealPhaseActive(true);
+        }
 
         scene.ammoRevealPhase = true;
         scene.firedShots = [];
@@ -30,7 +40,11 @@ export class RoundManager {
         scene.gun.hideNextAmmo();
         scene.gun.resetAngles();
 
-        console.log(`[STATE] New Round Started. Chamber: ${scene.roundStartLive} Live, ${scene.roundStartBlank} Blank`);
+        logger.info("round_reveal_started", {
+            liveRounds: scene.roundStartLive,
+            blankRounds: scene.roundStartBlank,
+            totalRounds: scene.roundStartTotal
+        });
 
         // Play spin sound
         scene.sound.play("sndSpin");
@@ -46,10 +60,28 @@ export class RoundManager {
                 duration: 400,
                 onComplete: () => {
                     scene.ammoRevealPhase = false;
+                    if (isMultiplayer && scene.gameStore?.setClientRevealPhaseActive) {
+                        const finishReveal = () => {
+                            scene.gameStore.setClientRevealPhaseActive(false);
+                        };
+
+                        if (typeof scene.gameStore.syncTurnStartAfterReveal === "function") {
+                            Promise.resolve(scene.gameStore.syncTurnStartAfterReveal(scene.state.roundNumber))
+                                .finally(finishReveal);
+                        } else {
+                            finishReveal();
+                        }
+                    }
                     scene.render();
                     scene.ammo.setAlpha(1);
-                    scene.ai.checkTurn();
+                    if (scene.ai?.checkTurn) {
+                        scene.ai.checkTurn();
+                    }
                     scene.players.updateAvatarStates(scene.state);
+                    logger.info("round_reveal_finished", {
+                        currentTurnIndex: scene.state.currentTurnIndex,
+                        roundNumber: scene.state.roundNumber
+                    });
                 }
             });
         });
@@ -61,6 +93,10 @@ export class RoundManager {
     startTimeout() {
         const scene = this.scene;
         const layout = this.getLayout();
+
+        if (scene.isMultiplayer && scene.gameStore?.setClientRevealPhaseActive) {
+            scene.gameStore.setClientRevealPhaseActive(true);
+        }
 
         scene.betweenRounds = true;
         scene.render();
@@ -77,7 +113,7 @@ export class RoundManager {
             ease: 'Back.easeOut'
         });
 
-        scene.time.delayedCall(3000, () => {
+        scene.time.delayedCall(BETWEEN_ROUND_TIMEOUT_MS, () => {
             scene.tweens.add({
                 targets: reloadContainer,
                 alpha: 0,
@@ -99,7 +135,5 @@ export class RoundManager {
 
         const nextRound = chamber[chamber.length - 1];
         this.scene.nextAmmoRevealed = nextRound;
-
-        this.scene.gun.revealNextAmmo(nextRound);
     }
 }

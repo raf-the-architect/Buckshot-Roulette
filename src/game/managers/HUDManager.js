@@ -90,9 +90,16 @@ export class HUDManager {
         // Update turn indicator with animation
         if (this.hudTurn) {
             const currentActor = state.players[state.currentTurnIndex];
-            const turnName = currentActor.id === "YOU" ? "Your Turn" : "Dealer's Turn";
-            const turnColor = currentActor.id === "YOU" ? COLORS.SUCCESS : COLORS.DANGER;
-            const turnColorHex = currentActor.id === "YOU" ? 0x43a047 : 0xc62828;
+            const myUserId = this.scene.getMyUserId?.();
+            const isMyTurn = this.scene.isMultiplayer
+                ? !!this.scene.gameStore?.isMyTurn
+                : currentActor.id === "YOU";
+
+            const turnName = isMyTurn
+                ? "Your Turn"
+                : (this.scene.isMultiplayer ? "Opponent Turn" : "Dealer's Turn");
+            const turnColor = isMyTurn ? COLORS.SUCCESS : COLORS.DANGER;
+            const turnColorHex = isMyTurn ? 0x43a047 : 0xc62828;
 
             if (this.hudTurn.text !== turnName) {
                 this.scene.tweens.add({
@@ -117,7 +124,7 @@ export class HUDManager {
                         });
 
                         // Single Pulse on turn start (If it's YOUR turn)
-                        if (currentActor.id === "YOU") {
+                        if (isMyTurn) {
                             this.turnGlow.clear();
                             this.turnGlow.lineStyle(2, 0x43a047);
                             this.turnGlow.strokeRoundedRect(layout.WIDTH - 70 - 62, 25 - 18, 124, 36, 10);

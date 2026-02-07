@@ -16,28 +16,23 @@ export class ItemRenderer {
     render(container, items, isInteractive, isDealer, ammoRevealPhase, betweenRounds) {
         container.removeAll(true);
 
+        const groupedItems = this.groupItems(items || []);
         const itemSpacing = 36;
-        const startX = -((Math.min(items.length, 6) - 1) * itemSpacing) / 2;
+        const startX = -((Math.min(groupedItems.length, 6) - 1) * itemSpacing) / 2;
 
-        items.forEach((item, i) => {
+        groupedItems.forEach((entry, i) => {
+            const item = entry.item;
+            const count = entry.count;
             const assetKey = ITEM_ASSET_MAP[item];
+            if (!assetKey) return;
             const col = i % 6;
             const row = Math.floor(i / 6);
             const tx = startX + col * itemSpacing;
             const ty = row * 42;
 
-            // Item Size Normalization
-            const icon = this.scene.add.image(tx, ty, assetKey);
-
             const maxDim = 32;
-            const scale = Math.min(maxDim / icon.width, maxDim / icon.height);
-            icon.setScale(scale);
-
-            if (icon.texture) {
-                icon.texture.setFilter(Phaser.Textures.FilterMode.NEAREST);
-            }
-
-            icon.setOrigin(0.5, 0.5);
+            const icon = this.scene.imageService.createImage(tx, ty, assetKey);
+            const scale = this.scene.imageService.setScaleFromMaxDimension(icon, maxDim, { allowUpscale: true });
 
             // Dealer items de-emphasized
             if (isDealer) {
@@ -77,6 +72,58 @@ export class ItemRenderer {
             }
 
             container.add(icon);
+
+            if (count > 1) {
+                const badgeOffsetX = (icon.displayWidth * 0.34);
+                const badgeOffsetY = -(icon.displayHeight * 0.34);
+                const badgeCircle = this.scene.add.circle(
+                    tx + badgeOffsetX,
+                    ty + badgeOffsetY,
+                    9,
+                    0xe53935,
+                    0.95
+                );
+                const badgeText = this.scene.add.text(
+                    tx + badgeOffsetX,
+                    ty + badgeOffsetY,
+                    String(count),
+                    {
+                        fontFamily: "Arial, sans-serif",
+                        fontSize: "10px",
+                        fontStyle: "bold",
+                        color: "#ffffff"
+                    }
+                ).setOrigin(0.5);
+
+                if (isDealer || ammoRevealPhase || betweenRounds) {
+                    badgeCircle.setAlpha(0.75);
+                    badgeText.setAlpha(0.85);
+                }
+
+                container.add(badgeCircle);
+                container.add(badgeText);
+            }
         });
+    }
+
+    /**
+     * Collapse duplicate items while preserving first-seen order.
+     */
+    groupItems(items) {
+        const counts = new Map();
+        const order = [];
+
+        items.forEach((item) => {
+            if (!counts.has(item)) {
+                counts.set(item, 0);
+                order.push(item);
+            }
+            counts.set(item, counts.get(item) + 1);
+        });
+
+        return order.map((item) => ({
+            item,
+            count: counts.get(item) || 0
+        }));
     }
 }

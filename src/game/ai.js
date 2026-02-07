@@ -36,7 +36,7 @@ export function decideAIAction(state, rng) {
     if (liveRatio >= 0.5) {
       const opp = state.players.find(p => p.id === "YOU");
       if (ai.items.includes(ITEM_KEYS.HANDCUFFS) && opp.turnsWaiting === 0) {
-        return { type: "USE_ITEM", item: ITEM_KEYS.HANDCUFFS };
+        return { type: "USE_ITEM", item: ITEM_KEYS.HANDCUFFS, targetId: "YOU" };
       }
       if (ai.items.includes(ITEM_KEYS.MAGNIFYING_GLASS) && !state.shotgun.nextRoundRevealed) {
         return { type: "USE_ITEM", item: ITEM_KEYS.MAGNIFYING_GLASS };
@@ -53,6 +53,8 @@ export function decideAIAction(state, rng) {
     const randomItem = ai.items[Math.floor(rng.random() * ai.items.length)];
     if (randomItem === ITEM_KEYS.MAGNIFYING_GLASS && state.shotgun.nextRoundRevealed) {
         // skip
+    } else if (randomItem === ITEM_KEYS.HANDCUFFS) {
+        return { type: "USE_ITEM", item: ITEM_KEYS.HANDCUFFS, targetId: "YOU" };
     } else {
         return { type: "USE_ITEM", item: randomItem };
     }

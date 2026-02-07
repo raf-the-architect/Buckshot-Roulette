@@ -105,36 +105,24 @@ export class EffectsManager {
     // DAMAGE EFFECT
     // ==========================================================================
     playDamageEffect(playerIndex) {
-        const scale = this.getScale();
         const pc = this.scene.playerContainers[playerIndex];
+        if (!pc?.avatar || !pc?.container) return;
 
         pc.avatar.setTint(0xc62828);
         this.scene.time.delayedCall(130, () => {
             pc.avatar.clearTint();
         });
 
-        const hearts = pc.heartContainer.list;
-        if (hearts.length > 0) {
-            const lastFullHeartIdx = hearts.findLastIndex(h => h.texture.key === "heartFull");
-            const targetHeart = lastFullHeartIdx !== -1 ? hearts[lastFullHeartIdx] : null;
-
-            if (targetHeart) {
-                this.scene.tweens.add({
-                    targets: targetHeart,
-                    y: targetHeart.y - 12,
-                    scale: scale.HEART * 1.4,
-                    alpha: 0,
-                    duration: 280,
-                    ease: 'Back.easeIn',
-                    onComplete: () => {
-                        targetHeart.setTexture("heartEmpty");
-                        targetHeart.y = 0;
-                        targetHeart.alpha = 0.4;
-                        targetHeart.setScale(scale.HEART);
-                    }
-                });
-            }
-        }
+        // Visual hit pulse only; health/hearts must always come from authoritative state.
+        const hitPulse = this.scene.add.circle(pc.container.x, pc.container.y, 34, 0xc62828, 0.45);
+        this.scene.tweens.add({
+            targets: hitPulse,
+            scale: { from: 0.8, to: 1.8 },
+            alpha: 0,
+            duration: 260,
+            ease: 'Quad.easeOut',
+            onComplete: () => hitPulse.destroy()
+        });
     }
 
     // ==========================================================================
@@ -211,9 +199,10 @@ export class EffectsManager {
     playHandcuffEffect(targetIndex) {
         const pc = this.scene.playerContainers[targetIndex];
 
-        const chain = this.scene.add.image(pc.container.x, pc.container.y, "itemHandcuffs")
-            .setScale(0.28)
-            .setAlpha(0);
+        const chain = this.scene.imageService.createImage(pc.container.x, pc.container.y, "itemHandcuffs", {
+            scale: 0.28,
+            alpha: 0
+        });
 
         this.scene.tweens.add({
             targets: chain,

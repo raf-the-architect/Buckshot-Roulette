@@ -24,6 +24,18 @@
     --r-card: 24px;
     --r-btn: 50px;
     --r-input: 16px;
+    --app-width: 100vw;
+    --app-height: 100dvh;
+}
+
+html,
+body,
+#app {
+    width: 100%;
+    height: var(--app-height);
+    min-height: var(--app-height);
+    overflow: hidden;
+    overscroll-behavior: none;
 }
 
 body {
@@ -32,6 +44,10 @@ body {
     font-family: 'Inter', sans-serif;
     background-color: #000;
     /* Game background is black, UI sits on top */
+    width: var(--app-width);
+    height: var(--app-height);
+    position: fixed;
+    inset: 0;
 }
 
 /* Blurred background for landscape mode */
@@ -40,9 +56,9 @@ body::before {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100vw;
-    height: 100vh;
-    background-image: url('../assets/images/background.png');
+    width: var(--app-width);
+    height: var(--app-height);
+    background-image: url('/assets/images/background.png');
     background-size: cover;
     background-position: center;
     filter: blur(20px) brightness(0.4);
@@ -62,30 +78,18 @@ body::before {
 
 /* Ensure Phaser fills the entire screen */
 #phaser-container {
-    width: 100vw;
-    height: 100vh;
+    width: var(--app-width);
+    height: var(--app-height);
     position: fixed;
     top: 0;
     left: 0;
     display: flex;
     justify-content: center;
     align-items: center;
+    box-sizing: border-box;
 }
 
-/* Portrait: fill entire screen */
-@media (orientation: portrait) {
-    #phaser-container canvas {
-        width: 100% !important;
-        height: 100% !important;
-    }
-}
-
-/* Landscape: preserve aspect ratio, center canvas */
-@media (orientation: landscape) {
-    #phaser-container canvas {
-        width: auto !important;
-        height: 100% !important;
-        max-width: 100%;
-        box-shadow: 0 0 60px rgba(0, 0, 0, 0.8);
-    }
+#phaser-container canvas {
+    display: block;
+    image-rendering: auto;
 }

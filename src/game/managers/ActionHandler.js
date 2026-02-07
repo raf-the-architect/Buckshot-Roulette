@@ -5,6 +5,9 @@
 
 import { applyAction, ITEM_KEYS } from "../gameLogic.js";
 import { ITEM_ASSET_MAP, SCALE } from "../LayoutConfig.js";
+import { createLogger } from "@/utils/logger";
+
+const logger = createLogger("ActionHandler");
 
 export class ActionHandler {
     constructor(scene) {
@@ -53,9 +56,9 @@ export class ActionHandler {
         actionIndicator.add(bg);
 
         if (iconKey) {
-            const icon = this.scene.add.image(0, y, iconKey)
-                .setScale(scale.ITEM * 1.8)
-                .setOrigin(0.5, 0.5);
+            const icon = this.scene.imageService.createImage(0, y, iconKey, {
+                scale: scale.ITEM * 1.8
+            });
             actionIndicator.add(icon);
 
             this.scene.tweens.add({
@@ -128,23 +131,91 @@ export class ActionHandler {
      * Process action after any pre-animations
      */
     processAction(action, actorId, wasLive, prevChamberLength) {
+        const normalizedAction = this.normalizeAction(action, actorId);
         const isShot = action.type.startsWith("SHOOT");
-        const isBeer = action.type === "USE_ITEM" && action.item === ITEM_KEYS.BEER;
+        const isBeer = normalizedAction.type === "USE_ITEM" && normalizedAction.item === ITEM_KEYS.BEER;
         const prevHealth = this.scene.state.players.map(p => p.health);
+        const actorIndex = actorId === "YOU" ? 0 : 1;
+        const targetIndex = this.resolveTargetIndex(normalizedAction, actorId);
+        const actorBefore = this.scene.state.players[actorIndex];
+        const targetBefore = this.scene.state.players[targetIndex];
+        const chamberBefore = {
+            total: this.scene.state.shotgun.chamber.length,
+            live: this.scene.state.shotgun.live,
+            blank: this.scene.state.shotgun.blank,
+            nextRound: this.scene.state.shotgun.chamber.length > 0
+                ? (this.scene.state.shotgun.chamber[this.scene.state.shotgun.chamber.length - 1] ? "live" : "blank")
+                : null
+        };
+        const roundBefore = this.scene.state.roundNumber;
+        const turnBefore = this.scene.state.currentTurnIndex;
 
-        if (action.type === "USE_ITEM") {
-            console.log(`[ACTION] ${actorId} used ${action.item}`);
+        this.scene.state = applyAction(this.scene.state, normalizedAction, this.scene.rng);
+
+        const actorAfter = this.scene.state.players[actorIndex];
+        const targetAfter = this.scene.state.players[targetIndex];
+        const chamberAfter = {
+            total: this.scene.state.shotgun.chamber.length,
+            live: this.scene.state.shotgun.live,
+            blank: this.scene.state.shotgun.blank,
+            nextRound: this.scene.state.shotgun.chamber.length > 0
+                ? (this.scene.state.shotgun.chamber[this.scene.state.shotgun.chamber.length - 1] ? "live" : "blank")
+                : null
+        };
+        const revealedRound = this.scene.state.shotgun.nextRoundRevealed
+            ? chamberAfter.nextRound
+            : null;
+        const turnAfter = this.scene.state.currentTurnIndex;
+        const roundAfter = this.scene.state.roundNumber;
+
+        if (normalizedAction.type === "USE_ITEM") {
+            logger.info("item_used", {
+                actorId,
+                item: normalizedAction.item,
+                targetId: normalizedAction.targetId || null,
+                actorHealthBefore: actorBefore?.health,
+                actorHealthAfter: actorAfter?.health,
+                targetHealthBefore: targetBefore?.health,
+                targetHealthAfter: targetAfter?.health,
+                chamberBefore,
+                chamberAfter,
+                revealedRound,
+                turnBefore,
+                turnAfter,
+                roundBefore,
+                roundAfter
+            });
         } else {
-            const targetStr = action.type === "SHOOT_PLAYER" ? (actorId === "YOU" ? "BOT" : "YOU") : actorId;
-            console.log(`[ACTION] ${actorId} shot ${targetStr}`);
+            const targetStr = normalizedAction.type === "SHOOT_PLAYER" ? (actorId === "YOU" ? "BOT" : "YOU") : actorId;
+            logger.info("shot_fired", {
+                actorId,
+                target: targetStr,
+                shotType: normalizedAction.type,
+                roundType: wasLive ? "live" : "blank",
+                actorHealthBefore: actorBefore?.health,
+                actorHealthAfter: actorAfter?.health,
+                targetHealthBefore: targetBefore?.health,
+                targetHealthAfter: targetAfter?.health,
+                chamberBefore,
+                chamberAfter,
+                turnBefore,
+                turnAfter,
+                roundBefore,
+                roundAfter
+            });
         }
-
-        this.scene.state = applyAction(this.scene.state, action, this.scene.rng);
 
         if (isShot) {
             this.scene.firedShots.push({ wasLive });
 
-            console.log(`[RESULT] ${wasLive ? "💥 LIVE ROUND!" : "💨 BLANK ROUND"}`);
+            logger.info("shot_result", {
+                wasLive,
+                actorId,
+                targetId: normalizedAction.targetId || null,
+                chamberAfter,
+                roundAfter,
+                turnAfter
+            });
 
             this.scene.nextAmmoRevealed = null;
             this.scene.gun.hideNextAmmo();
@@ -154,7 +225,7 @@ export class ActionHandler {
             } else {
                 this.scene.sound.play("sndDryFire");
             }
-            this.scene.effects.playShootEffect(wasLive, action);
+            this.scene.effects.playShootEffect(wasLive, normalizedAction);
 
             const crossedRevolvers = this.scene.gun.getCrossedRevolversSprite();
             const gunSprite = this.scene.gun.getGunSprite();
@@ -169,29 +240,31 @@ export class ActionHandler {
             });
         }
 
-        if (action.type === "USE_ITEM") {
-            this.scene.effects.playItemEffect(action.item, actorId);
+        if (normalizedAction.type === "USE_ITEM") {
+            this.scene.effects.playItemEffect(normalizedAction.item, actorId);
 
             if (isBeer && prevChamberLength > 0) {
                 this.scene.firedShots.push({ wasLive });
                 this.scene.effects.playBeerEffect(wasLive);
             }
 
-            if (action.item === ITEM_KEYS.MAGNIFYING_GLASS) {
-                this.scene.round.revealNextAmmo();
+            if (normalizedAction.item === ITEM_KEYS.MAGNIFYING_GLASS) {
+                if (actorId === "YOU") {
+                    this.scene.round.revealNextAmmo();
+                }
             }
 
-            if (action.item === ITEM_KEYS.CIGARETTE) {
+            if (normalizedAction.item === ITEM_KEYS.CIGARETTE) {
                 const idx = actorId === "YOU" ? 0 : 1;
                 this.scene.effects.playHealEffect(idx);
             }
 
-            if (action.item === ITEM_KEYS.HANDCUFFS) {
-                const targetIdx = actorId === "YOU" ? 1 : 0;
+            if (normalizedAction.item === ITEM_KEYS.HANDCUFFS) {
+                const targetIdx = this.resolveTargetIndex(normalizedAction, actorId);
                 this.scene.effects.playHandcuffEffect(targetIdx);
             }
 
-            if (action.item === ITEM_KEYS.KNIFE) {
+            if (normalizedAction.item === ITEM_KEYS.KNIFE) {
                 this.scene.effects.playKnifeEffect();
             }
         }
@@ -205,7 +278,7 @@ export class ActionHandler {
 
         this.scene.render();
 
-        if (action.type.startsWith("SHOOT")) {
+        if (normalizedAction.type.startsWith("SHOOT")) {
             this.scene.targetedIndex = null;
             this.scene.isProcessing = true;
             this.scene.time.delayedCall(700, () => {
@@ -224,5 +297,38 @@ export class ActionHandler {
                 this.scene.players.updateAvatarStates(this.scene.state);
             });
         }
+    }
+
+    normalizeAction(action, actorId) {
+        const normalized = { ...action };
+
+        if (normalized.type === "USE_ITEM" && normalized.item) {
+            normalized.item = this.scene.normalizeItemKey?.(normalized.item) || normalized.item;
+
+            if (normalized.item === ITEM_KEYS.HANDCUFFS && !normalized.targetId) {
+                const targetPlayer = this.scene.state.players.find(p => {
+                    const playerId = p.userId || p.id;
+                    if (!p.alive) return false;
+                    return playerId !== actorId && p.id !== actorId;
+                });
+
+                if (targetPlayer) {
+                    normalized.targetId = targetPlayer.userId || targetPlayer.id;
+                }
+            }
+        }
+
+        return normalized;
+    }
+
+    resolveTargetIndex(action, actorId) {
+        if (!action?.targetId) return actorId === "YOU" ? 1 : 0;
+
+        const index = this.scene.state.players.findIndex(p =>
+            p.id === action.targetId || p.userId === action.targetId
+        );
+
+        if (index === -1) return actorId === "YOU" ? 1 : 0;
+        return index;
     }
 }

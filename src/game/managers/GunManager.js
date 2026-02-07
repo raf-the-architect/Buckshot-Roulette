@@ -34,21 +34,21 @@ export class GunManager {
         const layout = this.getLayout();
         const scale = this.getScale();
 
-        this.gunSprite = this.scene.add.image(layout.CENTER_X, layout.GUN_ZONE.y, "gun")
-            .setScale(scale.GUN)
-            .setOrigin(0.5, 0.5);
+        this.gunSprite = this.scene.imageService.createImage(layout.CENTER_X, layout.GUN_ZONE.y, "gun", {
+            scale: scale.GUN
+        });
 
         // Next ammo reveal sprite (for magnifying glass)
-        this.nextAmmoSprite = this.scene.add.image(layout.CENTER_X, layout.NEXT_AMMO_ZONE.y, "ammoUnknown")
-            .setScale(scale.AMMO * 1.3)
-            .setOrigin(0.5, 0.5)
-            .setVisible(false);
+        this.nextAmmoSprite = this.scene.imageService.createImage(layout.CENTER_X, layout.NEXT_AMMO_ZONE.y, "ammoUnknown", {
+            scale: scale.AMMO * 1.3,
+            visible: false
+        });
 
         // Crossed revolvers sprite (Visual replacement for knife logic)
-        this.crossedRevolversSprite = this.scene.add.image(layout.CENTER_X, layout.GUN_ZONE.y, "crossedRevolvers")
-            .setScale(scale.GUN)
-            .setOrigin(0.5, 0.5)
-            .setVisible(false);
+        this.crossedRevolversSprite = this.scene.imageService.createImage(layout.CENTER_X, layout.GUN_ZONE.y, "crossedRevolvers", {
+            scale: scale.GUN,
+            visible: false
+        });
     }
 
     /**

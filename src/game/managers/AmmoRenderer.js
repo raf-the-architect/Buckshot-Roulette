@@ -34,9 +34,12 @@ export class AmmoRenderer {
     /**
      * Render ammo based on current game state
      */
-    render(roundStartTotal, roundStartLive, firedShots, ammoRevealPhase) {
+    render(roundStartTotal, roundStartLive, firedShots, ammoRevealPhase, nextAmmoRevealed = null) {
         const scale = this.getScale();
         this.ammoContainer.removeAll(true);
+        const normalizedReveal = nextAmmoRevealed === true
+            ? "live"
+            : (nextAmmoRevealed === false ? "blank" : nextAmmoRevealed);
 
         const totalSlots = roundStartTotal;
         const fired = firedShots.length;
@@ -64,13 +67,19 @@ export class AmmoRenderer {
                 ammoKey = "ammoUnknown";
             }
 
-            const ammo = this.scene.add.image(startX + i * ammoSpacing, 0, ammoKey)
-                .setScale(scale.AMMO)
-                .setOrigin(0.5, 0.5);
+            const ammo = this.scene.imageService.createImage(startX + i * ammoSpacing, 0, ammoKey, {
+                scale: scale.AMMO
+            });
 
-            // Fired shells have reduced opacity
+            // Fired shells stay fully visible once revealed
             if (i < fired) {
-                ammo.setAlpha(0.4);
+                ammo.setAlpha(1);
+            }
+
+            // Magnifying glass reveal for next round only (local player view)
+            if (!ammoRevealPhase && i === fired && (normalizedReveal === "live" || normalizedReveal === "blank")) {
+                ammo.setTexture(normalizedReveal === "live" ? "ammoFilled" : "ammoEmpty");
+                ammo.setAlpha(0.5);
             }
 
             if (ammoRevealPhase && i >= fired) {
