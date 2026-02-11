@@ -79,6 +79,7 @@ import { computed } from 'vue';
 import { useAuthStore } from '@/stores/authStore';
 import { useRoomStore } from '@/stores/roomStore';
 import { useGameStore } from '@/stores/gameStore';
+import { MIN_PLAYERS, MAX_PLAYERS } from '@/utils/constants';
 import { createLogger } from '@/utils/logger';
 import PlayerCard from './PlayerCard.vue';
 
@@ -95,13 +96,13 @@ const isReady = computed(() => {
 });
 
 const emptySlots = computed(() => {
-  const max = roomStore.currentRoom?.maxPlayers || 2;
+  const max = roomStore.currentRoom?.maxPlayers || MAX_PLAYERS;
   return Math.max(0, max - roomStore.roomPlayers.length);
 });
 
 const getStartHelperText = computed(() => {
-  if (roomStore.roomPlayers.length < 2) {
-    return 'Need exactly 2 players to start';
+  if (roomStore.roomPlayers.length < MIN_PLAYERS) {
+    return `Need at least ${MIN_PLAYERS} players to start`;
   }
   const notReady = roomStore.roomPlayers.filter(p => !p.isReady);
   if (notReady.length > 0) {
@@ -148,6 +149,8 @@ const copyLink = () => {
   min-height: 100vh;
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
   color: white;
+  height: 100%;
+  overflow: auto;
 }
 
 .lobby-header {

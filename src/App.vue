@@ -44,7 +44,19 @@
           {{ countdownRemaining }}
         </div>
         <h2 class="start-sync-title">{{ startSyncTitle }}</h2>
-        <p class="start-sync-subtitle">{{ startSyncSubtitle }}</p>
+        <p v-if="startSyncSubtitle" class="start-sync-subtitle">{{ startSyncSubtitle }}</p>
+        <ul v-if="startSyncPlayerStatuses.length" class="start-sync-player-list">
+          <li
+            v-for="player in startSyncPlayerStatuses"
+            :key="player.userId"
+            class="start-sync-player-row"
+          >
+            <span class="start-sync-player-indicator" :class="{ ready: player.isReady }">
+              {{ player.isReady ? '✓' : '○' }}
+            </span>
+            <span class="start-sync-player-name">{{ player.name }}</span>
+          </li>
+        </ul>
       </div>
     </div>
 
@@ -58,6 +70,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useRoomStore } from '@/stores/roomStore';
 import { useGameStore } from '@/stores/gameStore';
 import { createLogger } from '@/utils/logger';
+import { MAX_PLAYERS, MIN_PLAYERS } from '@/utils/constants';
 
 // Components
 import StartScreen from '@/screens/StartScreen.vue';
@@ -162,10 +175,20 @@ const startSyncTitle = computed(() => {
 });
 
 const startSyncSubtitle = computed(() => {
-  if (startSyncPhase.value === 'countdown') return 'Match starts together for both players';
-  const loaded = Number(gameStore.loadedPlayersCount) || 0;
-  const total = Number(gameStore.expectedPlayersCount) || 2;
-  return `${loaded}/${total} players are ready`;
+  if (startSyncPhase.value === 'countdown') return 'Match starts together for all players';
+  return '';
+});
+
+const startSyncPlayerStatuses = computed(() => {
+  if (startSyncPhase.value !== 'loading') return [];
+  const players = gameStore.currentGame?.players || [];
+  const loadedBy = gameStore.startSync?.loadingReadyBy || {};
+
+  return players.map((player, index) => ({
+    userId: player.userId || `player-${index}`,
+    name: player.displayName || `Player ${index + 1}`,
+    isReady: !!loadedBy[player.userId]
+  }));
 });
 
 // =========================================================================
@@ -289,7 +312,7 @@ async function onCreateRoom() {
       await authStore.updateDisplayName(name);
     }
 
-    await roomStore.createRoom({ maxPlayers: 2 });
+    await roomStore.createRoom({ maxPlayers: MAX_PLAYERS });
     isMultiplayer.value = true;
     currentScreen.value = 'lobby';
   } catch (err) {
@@ -387,13 +410,15 @@ async function waitForGameReady(roomId, timeoutMs = 10000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const game = gameStore.currentGame;
+    const playerCount = Array.isArray(game?.players) ? game.players.length : 0;
     const hasCore =
       game &&
       (game.roomId === roomId || game.gameId === roomId) &&
       game.status === 'active' &&
       !!game.matchId &&
       Array.isArray(game.players) &&
-      game.players.length === 2 &&
+      playerCount >= MIN_PLAYERS &&
+      playerCount <= MAX_PLAYERS &&
       game.players.some(p => p.userId === authStore.userId) &&
       game.startSync &&
       game.shotgun &&
@@ -402,8 +427,7 @@ async function waitForGameReady(roomId, timeoutMs = 10000) {
 
     const hasItems =
       hasCore &&
-      game.players.every(p => Array.isArray(p.items)) &&
-      game.players.every(p => p.items.length > 0);
+      game.players.every(p => Array.isArray(p.items));
 
     if (hasItems) return true;
     await new Promise(resolve => setTimeout(resolve, 120));
@@ -729,5 +753,39 @@ watch(() => roomStore.currentRoom?.status, (status) => {
   margin: 0.55rem 0 0;
   font-size: 0.95rem;
   color: rgba(255, 255, 255, 0.84);
+}
+
+.start-sync-player-list {
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.45rem;
+  text-align: left;
+}
+
+.start-sync-player-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.92rem;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.start-sync-player-indicator {
+  width: 1.1rem;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.start-sync-player-indicator.ready {
+  color: #4caf50;
+}
+
+.start-sync-player-name {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

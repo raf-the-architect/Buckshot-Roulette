@@ -7,6 +7,7 @@ import { createInitialState, refillShotgun, ITEM_KEYS } from './gameLogic.js';
 import { ASSETS, SOUNDS, AVATAR_KEYS } from './LayoutConfig.js';
 import { getLayout, getScale } from './ResponsiveLayout.js';
 import { useAuthStore } from '@/stores/authStore';
+import { useRoomStore } from '@/stores/roomStore';
 import { ITEMS } from '@/utils/constants';
 import { createLogger } from '@/utils/logger';
 
@@ -46,6 +47,7 @@ export class GameScene extends Phaser.Scene {
 
     this.isMultiplayer = false;
     this.gameStore = null;
+    this.roomStore = null;
     this.currentUserId = null;
 
     this.multiplayerReadyNotified = false;
@@ -61,6 +63,9 @@ export class GameScene extends Phaser.Scene {
     this.bgImage = null;
     this.bgShade = null;
     this.resizeHandler = null;
+    this.localPlayerIndex = 0;
+    this.lastAfkUiSyncAtMs = 0;
+    this.pendingMultiplayerItemSelection = null;
   }
 
   /**
@@ -72,6 +77,7 @@ export class GameScene extends Phaser.Scene {
     this.isMultiplayer = this.registry.get('isMultiplayer') || false;
     this.currentUserId = this.registry.get('currentUserId') || null;
     this.gameStore = this.isMultiplayer ? this.registry.get('gameStore') : null;
+    this.roomStore = this.isMultiplayer ? useRoomStore() : null;
 
     this.multiplayerReadyNotified = false;
     this.multiplayerFlowStarted = false;
@@ -81,6 +87,9 @@ export class GameScene extends Phaser.Scene {
     this.isPlayingMultiplayerAction = false;
     this.currentMatchId = this.gameStore?.currentGame?.matchId || null;
     this.lastStateVersion = -1;
+    this.localPlayerIndex = 0;
+    this.lastAfkUiSyncAtMs = 0;
+    this.pendingMultiplayerItemSelection = null;
   }
 
   /**
@@ -104,21 +113,44 @@ export class GameScene extends Phaser.Scene {
    * @returns {string | null}
    */
   getMyUserId() {
-    if (this.currentUserId) return this.currentUserId;
-
+    let authUserId = null;
     try {
-      const authStore = useAuthStore();
-      if (authStore?.userId) {
-        this.currentUserId = authStore.userId;
-        return this.currentUserId;
-      }
+      authUserId = useAuthStore()?.userId || null;
     } catch (_err) {
       // Ignore store bootstrap timing race.
     }
 
+    const gamePlayers = this.gameStore?.currentGame?.players || [];
+    const containsUser = (userId) =>
+      !!userId && (!gamePlayers.length || gamePlayers.some(player => player?.userId === userId));
+
+    if (containsUser(authUserId)) {
+      if (this.currentUserId && this.currentUserId !== authUserId) {
+        logger.debug('local_user_id_rebound', {
+          from: this.currentUserId,
+          to: authUserId
+        });
+      }
+      this.currentUserId = authUserId;
+      return this.currentUserId;
+    }
+
+    if (containsUser(this.currentUserId)) {
+      return this.currentUserId;
+    }
+
     const fallback = this.gameStore?.myPlayer?.userId || null;
-    if (fallback) this.currentUserId = fallback;
-    return fallback;
+    if (containsUser(fallback)) {
+      this.currentUserId = fallback;
+      return this.currentUserId;
+    }
+
+    if (authUserId) {
+      this.currentUserId = authUserId;
+      return this.currentUserId;
+    }
+
+    return this.currentUserId || null;
   }
 
   /**
@@ -137,6 +169,51 @@ export class GameScene extends Phaser.Scene {
    */
   toStoreItemKey(itemKey) {
     return LOGIC_TO_STORE_ITEM_KEY[itemKey] || itemKey;
+  }
+
+  /**
+   * Resolve latest room presence map by user id.
+   * @returns {Record<string, {isConnected: boolean, status: string, stale: boolean, lastPingMs: number}>}
+   */
+  getPresenceMapByUserId() {
+    if (!this.isMultiplayer) return {};
+    const store = this.roomStore || useRoomStore();
+    return store?.playerPresenceById || {};
+  }
+
+  /**
+   * Build compact presence signature for multiplayer hash checks.
+   * @returns {Array<object>}
+   */
+  getPresenceSignature() {
+    const presenceMap = this.getPresenceMapByUserId();
+    return Object.entries(presenceMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([userId, value]) => ({
+        userId,
+        isConnected: !!value?.isConnected,
+        status: value?.status || 'unknown',
+        stale: !!value?.stale
+      }));
+  }
+
+  /**
+   * Resolve local player index in current mapped state.
+   * @returns {number}
+   */
+  getLocalPlayerIndex() {
+    if (!this.isMultiplayer) return 0;
+    if (!this.state?.players?.length) return this.localPlayerIndex || 0;
+
+    const myUserId = this.getMyUserId();
+    if (!myUserId) return this.localPlayerIndex || 0;
+
+    const index = this.state.players.findIndex(player => player.userId === myUserId);
+    if (index >= 0) {
+      this.localPlayerIndex = index;
+      return index;
+    }
+    return this.localPlayerIndex || 0;
   }
 
   // ==========================================================================
@@ -240,7 +317,6 @@ export class GameScene extends Phaser.Scene {
     this.betweenRounds = false;
     this.targetedIndex = null;
     this.selectedTargetId = null;
-    this.opponentName = null;
     this.lastRevealedRoundNumber = null;
     this.processedActionIds = new Set();
     this.pendingMultiplayerAction = null;
@@ -266,11 +342,7 @@ export class GameScene extends Phaser.Scene {
 
     this.hud.setup();
 
-    const opponentName = this.getOpponentName();
     this.players.setup(this.playerName);
-    if (this.isMultiplayer && opponentName && opponentName !== 'Dealer') {
-      this.players.updateOpponentName(opponentName);
-    }
 
     this.gun.setup();
     this.ammo.setup();
@@ -403,19 +475,40 @@ export class GameScene extends Phaser.Scene {
     const myUserId = this.getMyUserId();
     if (!myUserId) return null;
 
-    const myIndex = game.players.findIndex(p => p.userId === myUserId);
-    const opponentIndex = game.players.findIndex(p => p.userId !== myUserId);
+    const playerIdsOrder = Array.isArray(game.playerIds) ? game.playerIds : [];
+    const orderedPlayers = [...game.players]
+      .sort((a, b) => {
+        const aPlayerIdIdx = playerIdsOrder.indexOf(a.userId);
+        const bPlayerIdIdx = playerIdsOrder.indexOf(b.userId);
+        const aHasPlayerId = aPlayerIdIdx >= 0;
+        const bHasPlayerId = bPlayerIdIdx >= 0;
+        if (aHasPlayerId || bHasPlayerId) {
+          const ai = aHasPlayerId ? aPlayerIdIdx : Number.MAX_SAFE_INTEGER;
+          const bi = bHasPlayerId ? bPlayerIdIdx : Number.MAX_SAFE_INTEGER;
+          if (ai !== bi) return ai - bi;
+        }
 
-    if (myIndex === -1 || opponentIndex === -1) {
+        const aSlot = Number.isFinite(Number(a.slotIndex)) ? Number(a.slotIndex) : Number.MAX_SAFE_INTEGER;
+        const bSlot = Number.isFinite(Number(b.slotIndex)) ? Number(b.slotIndex) : Number.MAX_SAFE_INTEGER;
+        if (aSlot !== bSlot) return aSlot - bSlot;
+        const aJoined = Date.parse(a.joinedAt || '') || 0;
+        const bJoined = Date.parse(b.joinedAt || '') || 0;
+        return aJoined - bJoined;
+      })
+      .slice(0, 8);
+
+    const myIndex = orderedPlayers.findIndex(p => p.userId === myUserId);
+    if (myIndex === -1) {
       logger.warn('state_map_player_index_missing');
       return null;
     }
 
-    const myPlayer = game.players[myIndex];
-    const opponent = game.players[opponentIndex];
-    this.opponentName = opponent.displayName || 'Opponent';
+    const presenceMap = this.getPresenceMapByUserId();
 
-    const localTurnIndex = game.currentTurn === myIndex ? 0 : 1;
+    this.localPlayerIndex = myIndex;
+    const currentTurnUserId = game.turnContext?.playerId || game.players?.[game.currentTurn]?.userId || null;
+    const mappedTurnIndex = orderedPlayers.findIndex(player => player.userId === currentTurnUserId);
+    const localTurnIndex = mappedTurnIndex >= 0 ? mappedTurnIndex : 0;
 
     return {
       currentTurnIndex: localTurnIndex,
@@ -426,27 +519,17 @@ export class GameScene extends Phaser.Scene {
         blank: game.shotgun?.blankRounds || 0,
         nextRoundRevealed: false
       },
-      players: [
-        {
-          id: 'YOU',
-          userId: myPlayer.userId,
-          health: myPlayer.health,
-          maxHealth: myPlayer.maxHealth || 4,
-          items: (myPlayer.items || []).map(item => this.normalizeItemKey(item)),
-          turnsWaiting: 0,
-          alive: myPlayer.isAlive !== false
-        },
-        {
-          id: 'OPPONENT',
-          userId: opponent.userId,
-          displayName: opponent.displayName,
-          health: opponent.health,
-          maxHealth: opponent.maxHealth || 4,
-          items: (opponent.items || []).map(item => this.normalizeItemKey(item)),
-          turnsWaiting: 0,
-          alive: opponent.isAlive !== false
-        }
-      ],
+      players: orderedPlayers.map((player, index) => ({
+        id: player.userId || player.id || `PLAYER_${index}`,
+        userId: player.userId,
+        displayName: player.displayName || (player.userId === myUserId ? this.playerName : `Player ${index + 1}`),
+        health: player.health,
+        maxHealth: player.maxHealth || 4,
+        items: (player.items || []).map(item => this.normalizeItemKey(item)),
+        turnsWaiting: Math.max(0, Number(player.pendingSkipTurns || 0)),
+        alive: player.isAlive !== false,
+        isConnected: presenceMap[player.userId]?.isConnected ?? (player.isConnected !== false)
+      })),
       gameOver: game.status === 'ended',
       roundNumber: game.currentRound || 1,
       logs: []
@@ -462,26 +545,13 @@ export class GameScene extends Phaser.Scene {
       currentTurnIndex: 0,
       shotgun: { chamber: [], damage: 1, live: 0, blank: 0, nextRoundRevealed: false },
       players: [
-        { id: 'YOU', userId: this.currentUserId, health: 4, items: [], turnsWaiting: 0, alive: true },
-        { id: 'OPPONENT', health: 4, items: [], turnsWaiting: 0, alive: true }
+        { id: this.currentUserId || 'YOU', userId: this.currentUserId, health: 4, items: [], turnsWaiting: 0, alive: true, isConnected: true },
+        { id: 'OPPONENT', health: 4, items: [], turnsWaiting: 0, alive: true, isConnected: true }
       ],
       gameOver: false,
       roundNumber: 1,
       logs: []
     };
-  }
-
-  /**
-   * Resolve opponent display name.
-   * @returns {string}
-   */
-  getOpponentName() {
-    if (!this.isMultiplayer) return 'Dealer';
-    if (!this.gameStore?.currentGame?.players) return 'Opponent';
-
-    const myUserId = this.getMyUserId();
-    const opponent = this.gameStore.currentGame.players.find(p => p.userId !== myUserId);
-    return opponent?.displayName || 'Opponent';
   }
 
   /**
@@ -519,10 +589,12 @@ export class GameScene extends Phaser.Scene {
         },
         players: (game.players || []).map(p => ({
           userId: p.userId,
+          slotIndex: p.slotIndex,
           health: p.health,
           isAlive: p.isAlive,
           items: p.items || []
-        }))
+        })),
+        presence: this.getPresenceSignature()
       });
 
       if (stateHash === lastStateHash) {
@@ -556,10 +628,6 @@ export class GameScene extends Phaser.Scene {
         this.lastStateVersion = stateVersion;
       }
 
-      if (this.opponentName && this.players.playerContainers?.[1]) {
-        this.players.updateOpponentName(this.opponentName);
-      }
-
       if (this.pendingMultiplayerAction && !this.gameStore?.isMyTurn) {
         logger.debug('pending_action_released_on_turn_change');
         this.pendingMultiplayerAction = null;
@@ -585,7 +653,7 @@ export class GameScene extends Phaser.Scene {
         this.firedShots = [];
         this.nextAmmoRevealed = null;
         this.gun.hideNextAmmo();
-        this.round.startAmmoReveal();
+        this.round.startTimeout();
         return;
       }
 
@@ -787,9 +855,13 @@ export class GameScene extends Phaser.Scene {
     const myUserId = this.getMyUserId();
     if (!myUserId || !action) return 0;
 
-    const actorIsMe = action.playerId === myUserId;
+    const actorIndex = this.state.players.findIndex(
+      player => player.userId === action.playerId || player.id === action.playerId
+    );
+    const localIndex = this.getLocalPlayerIndex();
+    const actorIsMe = action.playerId === myUserId || actorIndex === localIndex;
     const actorId = actorIsMe ? 'YOU' : 'BOT';
-    const actorIndex = actorIsMe ? 0 : 1;
+    const resolvedActorIndex = actorIndex >= 0 ? actorIndex : (actorIsMe ? localIndex : 1);
     const result = action.result || {};
 
     logger.info('action_stream_event', {
@@ -803,18 +875,23 @@ export class GameScene extends Phaser.Scene {
     });
 
     if (action.type === 'shoot') {
-      const targetIsMe = action.targetId === myUserId;
-      const targetIndex = targetIsMe ? 0 : 1;
-      const shotType = targetIndex === actorIndex ? 'SHOOT_SELF' : 'SHOOT_PLAYER';
+      const targetIndex = this.state.players.findIndex(
+        player => player.userId === action.targetId || player.id === action.targetId
+      );
+      const fallbackOpponentIndex = this.state.players.findIndex((player, idx) => idx !== localIndex && player.alive);
+      const resolvedTargetIndex = targetIndex >= 0
+        ? targetIndex
+        : (action.targetId === myUserId ? localIndex : (fallbackOpponentIndex >= 0 ? fallbackOpponentIndex : localIndex));
+      const shotType = resolvedTargetIndex === resolvedActorIndex ? 'SHOOT_SELF' : 'SHOOT_PLAYER';
       const wasLive = result.roundType === 'live';
 
       this.action.showActionIndicator(actorId, shotType);
-      this.gun.rotateToTarget(targetIndex, () => {
+      this.gun.rotateToTarget(resolvedTargetIndex, () => {
         this.effects.playShootEffect(wasLive, { type: shotType });
         this.sound.play(wasLive ? 'sndGunshot' : 'sndDryFire');
 
         if (wasLive && (result.damage || 0) > 0) {
-          this.effects.playDamageEffect(targetIndex);
+          this.effects.playDamageEffect(resolvedTargetIndex);
         }
 
         this.time.delayedCall(220, () => {
@@ -871,10 +948,17 @@ export class GameScene extends Phaser.Scene {
           this.effects.playBeerEffect(wasLive);
         }
       } else if (itemKey === ITEM_KEYS.CIGARETTE) {
-        this.effects.playHealEffect(actorIndex);
+        this.effects.playHealEffect(resolvedActorIndex);
       } else if (itemKey === ITEM_KEYS.HANDCUFFS) {
-        const targetIndex = action.targetId === myUserId ? 0 : 1;
-        this.effects.playHandcuffEffect(targetIndex);
+        const targetIndex = this.state.players.findIndex(
+          player => player.userId === action.targetId || player.id === action.targetId
+        );
+        if (targetIndex >= 0) {
+          this.effects.playHandcuffEffect(targetIndex);
+        }
+        if (actorIsMe) {
+          this.clearTargetSelection();
+        }
       } else if (itemKey === ITEM_KEYS.KNIFE) {
         this.effects.playKnifeEffect();
       } else if (itemKey === ITEM_KEYS.MAGNIFYING_GLASS) {
@@ -889,6 +973,7 @@ export class GameScene extends Phaser.Scene {
         actorId,
         item: itemKey,
         targetId: action.targetId || null,
+        targetPendingSkipsAfter: result.targetPendingSkipsAfter ?? null,
         revealedRound: result.revealedRound || null,
         ejectedRound: result.ejectedRound || null,
         actorHealthAfter: result.actorHealthAfter,
@@ -918,6 +1003,25 @@ export class GameScene extends Phaser.Scene {
     const resolvedUserId = targetPlayer.userId || userId;
     if (!resolvedUserId) return;
 
+    if (this.isAwaitingHandcuffTargetSelection()) {
+      const myUserId = this.getMyUserId();
+      if (resolvedUserId === myUserId) return;
+
+      logger.debug('handcuff_target_selected', { userId: resolvedUserId, index });
+      this.targetedIndex = index;
+      this.selectedTargetId = resolvedUserId;
+      this.pendingMultiplayerItemSelection = null;
+      this.isProcessing = true;
+      this.updateButtonStates();
+
+      void this.executeMultiplayerAction({
+        type: 'USE_ITEM',
+        item: ITEM_KEYS.HANDCUFFS,
+        targetId: resolvedUserId
+      });
+      return;
+    }
+
     logger.debug('target_selected', { userId: resolvedUserId, index });
 
     if (this.selectedTargetId === resolvedUserId) {
@@ -937,12 +1041,20 @@ export class GameScene extends Phaser.Scene {
   // ==========================================================================
 
   update() {
-    if (!this.maskGraphicsMap) return;
+    if (this.maskGraphicsMap) {
+      this.maskGraphicsMap.forEach((graphics, container) => {
+        graphics.x = container.x;
+        graphics.y = container.y;
+      });
+    }
 
-    this.maskGraphicsMap.forEach((graphics, container) => {
-      graphics.x = container.x;
-      graphics.y = container.y;
-    });
+    if (this.isMultiplayer && this.state && this.players?.updateAfkBadges) {
+      const now = Date.now();
+      if (!this.lastAfkUiSyncAtMs || (now - this.lastAfkUiSyncAtMs) >= 350) {
+        this.players.updateAfkBadges(this.state);
+        this.lastAfkUiSyncAtMs = now;
+      }
+    }
   }
 
   /**
@@ -974,6 +1086,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
+   * True while handcuffs are selected and a target is required.
+   * @returns {boolean}
+   */
+  isAwaitingHandcuffTargetSelection() {
+    return this.isMultiplayer && this.pendingMultiplayerItemSelection === ITEM_KEYS.HANDCUFFS;
+  }
+
+  /**
    * Clear selected target and avatar highlight.
    */
   clearTargetSelection() {
@@ -992,6 +1112,10 @@ export class GameScene extends Phaser.Scene {
   onPlayerAction(actionData) {
     if (this.isProcessing) return;
     if (!this.canTakeTurnAction()) return;
+
+    if (this.isAwaitingHandcuffTargetSelection()) {
+      this.pendingMultiplayerItemSelection = null;
+    }
 
     this.isProcessing = true;
     this.updateButtonStates();
@@ -1019,13 +1143,34 @@ export class GameScene extends Phaser.Scene {
    * @param {string} item - Item key.
    */
   onItemAction(item) {
+    const normalizedItem = this.normalizeItemKey(item);
     if (this.isProcessing) return;
     if (!this.canTakeTurnAction()) return;
+
+    // In multiplayer >2, handcuffs require explicit target selection (cannot self-target).
+    if (this.isMultiplayer && normalizedItem === ITEM_KEYS.HANDCUFFS && (this.state?.players?.length || 0) > 2) {
+      const nextMode = this.pendingMultiplayerItemSelection === ITEM_KEYS.HANDCUFFS
+        ? null
+        : ITEM_KEYS.HANDCUFFS;
+      this.pendingMultiplayerItemSelection = nextMode;
+      if (nextMode) {
+        this.clearTargetSelection();
+      }
+
+      logger.debug('handcuff_target_selection_mode', { active: !!nextMode });
+      this.isProcessing = false;
+      this.updateButtonStates();
+      this.render();
+      return;
+    }
+
+    if (this.pendingMultiplayerItemSelection) {
+      this.pendingMultiplayerItemSelection = null;
+    }
 
     this.isProcessing = true;
     this.updateButtonStates();
 
-    const normalizedItem = this.normalizeItemKey(item);
     logger.debug('item_action_requested', { item: normalizedItem });
 
     if (this.isMultiplayer && this.gameStore) {
@@ -1064,13 +1209,14 @@ export class GameScene extends Phaser.Scene {
       if (actionData.type === 'SHOOT_PLAYER') {
         let targetUserId = actionData.targetId;
         if (!targetUserId) {
-          const opponent = this.state.players[1];
-          targetUserId = opponent.userId;
+          targetUserId = this.selectedTargetId;
         }
 
         if (!targetUserId) {
           logger.error('shoot_target_resolution_failed');
-          const opponent = this.gameStore.currentGame.players.find(player => player.userId !== myUserId);
+          const opponent = this.gameStore.currentGame.players.find(
+            player => player.userId !== myUserId && player.isAlive !== false
+          );
           targetUserId = opponent?.userId;
         }
 
@@ -1083,7 +1229,16 @@ export class GameScene extends Phaser.Scene {
 
         let targetUserId = actionData.targetId || null;
         if (!targetUserId && storeItemKey === ITEMS.HANDCUFFS) {
-          targetUserId = this.gameStore.currentGame.players.find(player => player.userId !== myUserId)?.userId || null;
+          targetUserId = this.selectedTargetId;
+        }
+        if (!targetUserId && storeItemKey === ITEMS.HANDCUFFS) {
+          const playerCount = this.gameStore?.currentGame?.players?.length || 0;
+          if (playerCount > 2) {
+            throw new Error('Target required');
+          }
+          targetUserId = this.gameStore.currentGame.players.find(
+            player => player.userId !== myUserId && player.isAlive !== false
+          )?.userId || null;
         }
 
         await this.gameStore.useItem(storeItemKey, targetUserId);
@@ -1096,6 +1251,7 @@ export class GameScene extends Phaser.Scene {
         error: err?.message || String(err)
       });
 
+      this.pendingMultiplayerItemSelection = null;
       this.pendingMultiplayerAction = null;
       this.isProcessing = false;
       this.updateButtonStates();
@@ -1122,7 +1278,33 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Resolve which non-local player items should be shown in the top item rail.
+   * Priority: selected target, current turn actor, then first alive opponent.
+   * @returns {number}
+   */
+  getSecondaryDisplayPlayerIndex() {
+    if (!this.state?.players?.length || this.state.players.length < 2) return -1;
+
+    if (this.selectedTargetId) {
+      const selectedIdx = this.state.players.findIndex(player =>
+        player.alive && (player.userId === this.selectedTargetId || player.id === this.selectedTargetId)
+      );
+      if (selectedIdx > 0) return selectedIdx;
+    }
+
+    if (this.state.currentTurnIndex > 0 && this.state.players[this.state.currentTurnIndex]?.alive) {
+      return this.state.currentTurnIndex;
+    }
+
+    return this.state.players.findIndex((player, idx) => idx > 0 && player.alive);
+  }
+
   render() {
+    if (!this.canTakeTurnAction() && this.pendingMultiplayerItemSelection) {
+      this.pendingMultiplayerItemSelection = null;
+    }
+
     if (this.isMultiplayer && this.selectedTargetId) {
       const selectedExists = this.state.players.some(
         player => player.alive && (player.userId === this.selectedTargetId || player.id === this.selectedTargetId)
@@ -1153,23 +1335,52 @@ export class GameScene extends Phaser.Scene {
     this.updateButtonStates();
 
     const canUseItems = !this.ammoRevealPhase && !this.betweenRounds;
-    this.items.render(
-      this.ui.getPlayerItemsContainer(),
-      this.state.players[0].items,
-      canUseItems,
-      false,
-      this.ammoRevealPhase,
-      this.betweenRounds
-    );
 
-    this.items.render(
-      this.ui.getBotItemsContainer(),
-      this.state.players[1].items,
-      false,
-      true,
-      this.ammoRevealPhase,
-      this.betweenRounds
-    );
+    if (this.isMultiplayer) {
+      const localIndex = this.getLocalPlayerIndex();
+      const canActWithItems = canUseItems && this.canTakeTurnAction() && !this.isProcessing;
+
+      this.state.players.forEach((player, index) => {
+        const container = this.players.getItemsContainer(index);
+        if (!container) return;
+
+        const alive = player.alive !== false && player.health > 0;
+        if (!alive) {
+          this.items.render(container, [], false, false, this.ammoRevealPhase, this.betweenRounds);
+          return;
+        }
+
+        const interactive = index === localIndex ? canActWithItems : false;
+        this.items.render(
+          container,
+          player.items || [],
+          interactive,
+          false,
+          this.ammoRevealPhase,
+          this.betweenRounds
+        );
+      });
+    } else {
+      this.items.render(
+        this.ui.getPlayerItemsContainer(),
+        this.state.players[0].items,
+        canUseItems,
+        false,
+        this.ammoRevealPhase,
+        this.betweenRounds
+      );
+
+      const secondaryIndex = this.getSecondaryDisplayPlayerIndex();
+      const secondaryItems = secondaryIndex >= 0 ? (this.state.players[secondaryIndex]?.items || []) : [];
+      this.items.render(
+        this.ui.getBotItemsContainer(),
+        secondaryItems,
+        false,
+        true,
+        this.ammoRevealPhase,
+        this.betweenRounds
+      );
+    }
 
     if (this.state.gameOver && !this.restartBtn) {
       this.handleGameOver();
@@ -1183,7 +1394,8 @@ export class GameScene extends Phaser.Scene {
   handleGameOver() {
     const layout = this.getLayout();
     const winner = this.state.players.find(player => player.alive);
-    const isWin = winner?.id === 'YOU';
+    const myUserId = this.getMyUserId();
+    const isWin = !!winner && (winner.userId === myUserId || winner.id === 'YOU');
 
     logger.info('game_over', { winnerId: winner?.id || null });
 

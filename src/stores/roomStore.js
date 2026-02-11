@@ -12,10 +12,12 @@ import {
 import { db } from '@/config/firebase';
 import { useAuthStore } from './authStore';
 import { generateId } from '@/utils/nameGenerator';
-import { ROOM_STATUS } from '@/utils/constants';
+import { ROOM_STATUS, MAX_PLAYERS, MIN_PLAYERS } from '@/utils/constants';
 import { createLogger } from '@/utils/logger';
 
 const logger = createLogger('RoomStore');
+const PRESENCE_HEARTBEAT_MS = 5000;
+const PRESENCE_STALE_MS = 15000;
 
 export const useRoomStore = defineStore('room', () => {
     // =========================================================================
@@ -25,10 +27,15 @@ export const useRoomStore = defineStore('room', () => {
     const roomPlayers = ref([]);
     const isLoading = ref(false);
     const error = ref(null);
+    const presenceNowTick = ref(Date.now());
 
     // Firebase listeners
     let unsubscribeRoom = null;
     let unsubscribePlayers = null;
+    let presenceHeartbeatInterval = null;
+    let presenceClockInterval = null;
+    let visibilityChangeHandler = null;
+    let pageHideHandler = null;
 
     // =========================================================================
     // GETTERS
@@ -44,11 +51,124 @@ export const useRoomStore = defineStore('room', () => {
 
     const canStart = computed(() => {
         return isHost.value &&
-            roomPlayers.value.length === 2 &&
+            roomPlayers.value.length >= MIN_PLAYERS &&
+            roomPlayers.value.length <= (currentRoom.value?.maxPlayers || MAX_PLAYERS) &&
             roomPlayers.value.every(p => p.isReady);
     });
 
     const playerCount = computed(() => roomPlayers.value.length);
+
+    /**
+     * Convert Firestore timestamp-like values to milliseconds.
+     * @param {any} value - Timestamp-like value.
+     * @returns {number}
+     */
+    const timestampToMillis = (value) => {
+        if (!value) return 0;
+        if (typeof value === 'number') return value;
+        if (typeof value?.toMillis === 'function') return value.toMillis();
+        if (typeof value?.seconds === 'number') {
+            return (value.seconds * 1000) + Math.floor((value.nanoseconds || 0) / 1_000_000);
+        }
+        const parsed = Date.parse(value);
+        return Number.isNaN(parsed) ? 0 : parsed;
+    };
+
+    const playerPresenceById = computed(() => {
+        const nowMs = presenceNowTick.value;
+        return roomPlayers.value.reduce((acc, player) => {
+            const userId = player.userId;
+            if (!userId) return acc;
+
+            const lastPingMs = timestampToMillis(player.lastPing);
+            const status = String(player.status || 'active');
+            const stale = !lastPingMs || (nowMs - lastPingMs) > PRESENCE_STALE_MS;
+            const isConnected = !stale && status !== 'away' && status !== 'left' && status !== 'offline';
+
+            acc[userId] = {
+                isConnected,
+                status,
+                stale,
+                lastPingMs
+            };
+            return acc;
+        }, {});
+    });
+
+    const stopPresenceClock = () => {
+        if (presenceClockInterval) {
+            clearInterval(presenceClockInterval);
+            presenceClockInterval = null;
+        }
+    };
+
+    const startPresenceClock = () => {
+        stopPresenceClock();
+        presenceNowTick.value = Date.now();
+        presenceClockInterval = setInterval(() => {
+            presenceNowTick.value = Date.now();
+        }, 1000);
+    };
+
+    const updateLocalPresence = async (status = 'active', roomIdOverride = null) => {
+        const roomIdVal = roomIdOverride || currentRoom.value?.roomId;
+        const authStore = useAuthStore();
+        if (!roomIdVal || !authStore.userId) return;
+
+        try {
+            await updateDoc(doc(db, 'rooms', roomIdVal, 'players', authStore.userId), {
+                status,
+                lastPing: serverTimestamp()
+            });
+        } catch (err) {
+            logger.debug('presence_update_failed', { status, error: err.message });
+        }
+    };
+
+    const stopPresenceHeartbeat = () => {
+        if (presenceHeartbeatInterval) {
+            clearInterval(presenceHeartbeatInterval);
+            presenceHeartbeatInterval = null;
+        }
+
+        if (visibilityChangeHandler) {
+            document.removeEventListener('visibilitychange', visibilityChangeHandler);
+            visibilityChangeHandler = null;
+        }
+
+        if (pageHideHandler) {
+            window.removeEventListener('pagehide', pageHideHandler);
+            window.removeEventListener('beforeunload', pageHideHandler);
+            pageHideHandler = null;
+        }
+    };
+
+    const startPresenceHeartbeat = (roomIdVal) => {
+        stopPresenceHeartbeat();
+
+        const pingActive = () => {
+            if (document.visibilityState !== 'visible') return;
+            void updateLocalPresence('active', roomIdVal);
+        };
+
+        pingActive();
+        presenceHeartbeatInterval = setInterval(pingActive, PRESENCE_HEARTBEAT_MS);
+
+        visibilityChangeHandler = () => {
+            if (document.visibilityState === 'visible') {
+                void updateLocalPresence('active', roomIdVal);
+                return;
+            }
+            void updateLocalPresence('away', roomIdVal);
+        };
+        document.addEventListener('visibilitychange', visibilityChangeHandler);
+
+        pageHideHandler = () => {
+            void updateLocalPresence('away', roomIdVal);
+        };
+        window.addEventListener('pagehide', pageHideHandler);
+        window.addEventListener('beforeunload', pageHideHandler);
+    };
 
     // =========================================================================
     // ACTIONS
@@ -67,11 +187,14 @@ export const useRoomStore = defineStore('room', () => {
             const authStore = useAuthStore();
             const roomCode = generateId(6);
 
+            const configuredMaxPlayers = Number(settings.maxPlayers) || MAX_PLAYERS;
+            const maxPlayers = Math.max(MIN_PLAYERS, Math.min(MAX_PLAYERS, configuredMaxPlayers));
+
             const roomData = {
                 roomId: roomCode,
                 hostId: authStore.userId,
                 status: ROOM_STATUS.WAITING,
-                maxPlayers: 2,
+                maxPlayers,
                 currentPlayers: 1,
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
@@ -88,6 +211,7 @@ export const useRoomStore = defineStore('room', () => {
                     displayName: authStore.displayName,
                     isHost: true,
                     isReady: true,
+                    slotIndex: 0,
                     joinedAt: new Date().toISOString()
                 }]
             };
@@ -149,10 +273,6 @@ export const useRoomStore = defineStore('room', () => {
                 throw new Error('Game has ended');
             }
 
-            if (roomData.currentPlayers >= 2) {
-                throw new Error('Room already has 2 players');
-            }
-
             if (roomData.currentPlayers >= roomData.maxPlayers) {
                 throw new Error('Room is full');
             }
@@ -193,6 +313,7 @@ export const useRoomStore = defineStore('room', () => {
                 displayName: authStore.displayName,
                 isHost: false,
                 isReady: true,
+                slotIndex,
                 joinedAt: new Date().toISOString()
             }];
 
@@ -264,6 +385,9 @@ export const useRoomStore = defineStore('room', () => {
                 logger.error('players_subscription_error', { roomId, error: err.message });
             }
         );
+
+        startPresenceClock();
+        startPresenceHeartbeat(roomId);
     };
 
     /**
@@ -307,6 +431,8 @@ export const useRoomStore = defineStore('room', () => {
         if (!roomIdVal) return;
 
         try {
+            stopPresenceHeartbeat();
+            stopPresenceClock();
             // Unsubscribe first
             unsubscribeFromRoom();
 
@@ -387,6 +513,8 @@ export const useRoomStore = defineStore('room', () => {
      * Unsubscribe from room listeners
      */
     const unsubscribeFromRoom = () => {
+        stopPresenceHeartbeat();
+        stopPresenceClock();
         if (unsubscribeRoom) {
             unsubscribeRoom();
             unsubscribeRoom = null;
@@ -410,6 +538,7 @@ export const useRoomStore = defineStore('room', () => {
         isInRoom,
         canStart,
         playerCount,
+        playerPresenceById,
 
         // Actions
         createRoom,

@@ -52,13 +52,24 @@ export class GunManager {
     }
 
     /**
-     * Rotate gun to target before shooting
+     * Rotate gun to target before shooting.
+     * Supports both 1v1 and multi-avatar layouts.
      */
     rotateToTarget(targetIndex, callback) {
-        // Set angle based on target's vertical position relative to gun
-        // Index 1 (BOT) is at the top -> point UP (90)
-        // Index 0 (YOU) is at the bottom -> point DOWN (-90)
-        const targetAngle = (targetIndex === 1 ? 90 : -90);
+        const targetContainer = this.scene.players?.getContainer?.(targetIndex);
+        let targetAngle;
+
+        if (targetContainer) {
+            const dx = targetContainer.container.x - this.gunSprite.x;
+            const dy = targetContainer.container.y - this.gunSprite.y;
+            // Neutral sprite orientation is 9 o'clock (left) at angle 0.
+            // Convert world direction into a relative angle in [-180, 180]:
+            // 12 o'clock -> +90, 6 o'clock -> -90, 3 o'clock -> ±180.
+            const worldAngleDeg = Phaser.Math.RadToDeg(Math.atan2(dy, dx));
+            targetAngle = Phaser.Math.Angle.WrapDegrees(worldAngleDeg - 180);
+        } else {
+            targetAngle = (targetIndex === 1 ? 90 : -90);
+        }
 
         // Ensure gun is on top
         this.gunSprite.setDepth(20);

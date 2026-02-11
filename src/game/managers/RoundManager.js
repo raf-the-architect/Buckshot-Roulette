@@ -6,7 +6,7 @@
 import { createLogger } from "@/utils/logger";
 
 const logger = createLogger("RoundManager");
-const BETWEEN_ROUND_TIMEOUT_MS = 1000;
+const BETWEEN_ROUND_TIMEOUT_MS = 3000;
 
 export class RoundManager {
     constructor(scene) {

@@ -20,7 +20,7 @@ import {
 import { db } from '@/config/firebase';
 import { useAuthStore } from './authStore';
 import { useRoomStore } from './roomStore';
-import { ITEMS, TURN_TIME_LIMIT } from '@/utils/constants';
+import { ITEMS, TURN_TIME_LIMIT, MIN_PLAYERS, MAX_PLAYERS } from '@/utils/constants';
 import { createLogger } from '@/utils/logger';
 
 const logger = createLogger('GameStore');
@@ -114,36 +114,37 @@ const distributeItemsInMemory = (players, roundNumber) => {
 };
 
 /**
- * Resolve next alive player's turn, applying one handcuff skip if needed.
+ * Resolve next alive player's turn, applying stacked handcuff skips.
  * @param {Array<object>} players - Player list.
  * @param {number} currentTurn - Current turn index.
- * @param {string | null} skipNextTurnId - User id to skip if encountered next.
- * @returns {{nextTurn: number, skippedUserId: string | null}}
+ * @returns {{nextTurn: number, skippedPlayers: Array<{userId: string, remaining: number}>}}
  */
-const resolveNextTurn = (players, currentTurn, skipNextTurnId) => {
+const resolveNextTurn = (players, currentTurn) => {
     let nextTurn = currentTurn;
-    let pendingSkipId = skipNextTurnId || null;
     let attempts = 0;
+    const skippedPlayers = [];
 
-    while (attempts < players.length * 3) {
+    while (attempts < players.length * 4) {
         nextTurn = (nextTurn + 1) % players.length;
         attempts++;
 
         const candidate = players[nextTurn];
         if (!candidate?.isAlive) continue;
 
-        if (pendingSkipId && candidate.userId === pendingSkipId) {
-            pendingSkipId = null;
+        const pendingSkips = Math.max(0, Number(candidate.pendingSkipTurns || 0));
+        if (pendingSkips > 0) {
+            candidate.pendingSkipTurns = pendingSkips - 1;
+            skippedPlayers.push({
+                userId: candidate.userId,
+                remaining: candidate.pendingSkipTurns
+            });
             continue;
         }
 
-        return {
-            nextTurn,
-            skippedUserId: pendingSkipId ? null : skipNextTurnId || null
-        };
+        return { nextTurn, skippedPlayers };
     }
 
-    return { nextTurn: currentTurn, skippedUserId: null };
+    return { nextTurn: currentTurn, skippedPlayers };
 };
 
 /**
@@ -154,12 +155,22 @@ const resolveNextTurn = (players, currentTurn, skipNextTurnId) => {
  * @returns {string | null}
  */
 const resolveHandcuffTarget = (players, actorUserId, targetPlayerId) => {
+    const aliveOpponents = players.filter(
+        p => p.isAlive && p.userId !== actorUserId
+    );
+    if (aliveOpponents.length === 0) return null;
+
     if (targetPlayerId) {
-        const explicit = players.find(p => p.userId === targetPlayerId && p.isAlive && p.userId !== actorUserId);
-        if (explicit) return explicit.userId;
+        const explicit = aliveOpponents.find(p => p.userId === targetPlayerId);
+        return explicit ? explicit.userId : null;
     }
 
-    return players.find(p => p.isAlive && p.userId !== actorUserId)?.userId || null;
+    // Auto-pick only when there is exactly one valid opponent.
+    if (aliveOpponents.length === 1) {
+        return aliveOpponents[0].userId;
+    }
+
+    return null;
 };
 
 /**
@@ -174,7 +185,6 @@ const buildTurnContext = (playerId) => ({
     selectedItem: null,
     targetPlayerId: null,
     hasShot: false,
-    skipNextTurn: null,
     revealedRound: null,
     revealSyncedRound: null
 });
@@ -514,8 +524,8 @@ export const useGameStore = defineStore('game', () => {
             const roomId = roomStore.roomId;
             const playerCount = roomStore.roomPlayers.length;
 
-            if (playerCount !== 2) {
-                throw new Error('Online mode supports exactly 2 players');
+            if (playerCount < MIN_PLAYERS || playerCount > MAX_PLAYERS) {
+                throw new Error(`Online mode supports ${MIN_PLAYERS} to ${MAX_PLAYERS} players`);
             }
 
             const initialHealth = calculateInitialHealth(playerCount);
@@ -526,6 +536,7 @@ export const useGameStore = defineStore('game', () => {
                 health: initialHealth,
                 maxHealth: initialHealth,
                 items: [],
+                pendingSkipTurns: 0,
                 isAlive: true,
                 isConnected: true,
                 lastActionAt: new Date().toISOString()
@@ -831,8 +842,13 @@ export const useGameStore = defineStore('game', () => {
                 case ITEMS.HANDCUFFS: {
                     resolvedTargetId = resolveHandcuffTarget(players, actorUserId, targetPlayerId);
                     if (!resolvedTargetId) throw new Error('Target required');
-                    turnContext.skipNextTurn = resolvedTargetId;
+                    const target = players.find(p => p.userId === resolvedTargetId && p.isAlive);
+                    if (!target) throw new Error('Target required');
+                    const pendingBefore = Math.max(0, Number(target.pendingSkipTurns || 0));
+                    target.pendingSkipTurns = pendingBefore + 1;
                     itemResult.targetId = resolvedTargetId;
+                    itemResult.targetPendingSkipsBefore = pendingBefore;
+                    itemResult.targetPendingSkipsAfter = target.pendingSkipTurns;
                     break;
                 }
 
@@ -1048,6 +1064,7 @@ export const useGameStore = defineStore('game', () => {
             let status = game.status;
             let winner = game.winner || null;
             let endedAt = game.endedAt || null;
+            let skippedPlayers = [];
 
             let turnContext = {
                 ...(game.turnContext || {}),
@@ -1083,8 +1100,9 @@ export const useGameStore = defineStore('game', () => {
                 shotgun.isSawedOff = false;
 
                 if (!extraTurn) {
-                    const turnResolution = resolveNextTurn(players, game.currentTurn, game.turnContext?.skipNextTurn || null);
+                    const turnResolution = resolveNextTurn(players, game.currentTurn);
                     currentTurn = turnResolution.nextTurn;
+                    skippedPlayers = turnResolution.skippedPlayers || [];
                     turnNumber = (game.turnNumber || 0) + 1;
                     turnContext = buildTurnContext(players[currentTurn].userId);
                 } else {
@@ -1098,8 +1116,9 @@ export const useGameStore = defineStore('game', () => {
                     };
                 }
             } else if (!extraTurn) {
-                const turnResolution = resolveNextTurn(players, game.currentTurn, game.turnContext?.skipNextTurn || null);
+                const turnResolution = resolveNextTurn(players, game.currentTurn);
                 currentTurn = turnResolution.nextTurn;
+                skippedPlayers = turnResolution.skippedPlayers || [];
                 turnNumber = (game.turnNumber || 0) + 1;
                 turnContext = buildTurnContext(players[currentTurn].userId);
             }
@@ -1124,7 +1143,8 @@ export const useGameStore = defineStore('game', () => {
                 turnAfter: currentTurn,
                 roundBefore: game.currentRound,
                 roundAfter: currentRound,
-                gameEnded
+                gameEnded,
+                skippedPlayers
             };
 
             const updatePayload = {
@@ -1207,7 +1227,7 @@ export const useGameStore = defineStore('game', () => {
             if (!current || current.userId !== actorUserId) return;
 
             const players = (game.players || []).map(p => ({ ...p }));
-            const turnResolution = resolveNextTurn(players, game.currentTurn, game.turnContext?.skipNextTurn || null);
+            const turnResolution = resolveNextTurn(players, game.currentTurn);
             const nextTurn = turnResolution.nextTurn;
             const stateVersionAfter = Number(game.stateVersion || 0) + 1;
 

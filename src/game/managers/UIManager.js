@@ -90,9 +90,16 @@ export class UIManager {
                 this.scene.onPlayerAction({ type: "SHOOT_SELF", playerId: "YOU" }));
         }
 
-        // Item containers
-        this.playerItemsContainer = this.scene.add.container(layout.CENTER_X, layout.PLAYER_ITEMS_ZONE.y);
-        this.botItemsContainer = this.scene.add.container(layout.CENTER_X, layout.BOT_ITEMS_ZONE.y);
+        // Item containers (shifted slightly downward in multiplayer for better visibility).
+        const topItemsY = this.scene.isMultiplayer
+            ? layout.BOT_ITEMS_ZONE.y + Math.round(layout.HEIGHT * 0.055)
+            : layout.BOT_ITEMS_ZONE.y;
+        const bottomItemsY = this.scene.isMultiplayer
+            ? layout.PLAYER_ITEMS_ZONE.y + Math.round(layout.HEIGHT * 0.05)
+            : layout.PLAYER_ITEMS_ZONE.y;
+
+        this.playerItemsContainer = this.scene.add.container(layout.CENTER_X, bottomItemsY);
+        this.botItemsContainer = this.scene.add.container(layout.CENTER_X, topItemsY);
 
         // Action indicator
         this.actionIndicator = this.scene.add.container(layout.CENTER_X, layout.HEIGHT / 2);

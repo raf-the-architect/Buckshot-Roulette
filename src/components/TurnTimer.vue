@@ -23,7 +23,7 @@
     </div>
     <span v-if="hasLimit">
       <span v-if="isMyTurn" class="turn-label">YOUR TURN</span>
-      <span v-else class="turn-label">OPPONENT'S TURN</span>
+      <span v-else class="turn-label">OTHER PLAYER'S TURN</span>
     </span>
     <span v-else class="turn-label">NO TURN LIMIT</span>
   </div>

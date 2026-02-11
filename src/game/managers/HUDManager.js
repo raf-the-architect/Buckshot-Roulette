@@ -14,6 +14,8 @@ export class HUDManager {
         this.turnPanel = null;
         this.turnGlow = null;
         this.lastTurnBorderHex = null;
+        this.turnLabelRaw = "Your Turn";
+        this.turnPanelWidth = 128;
     }
 
     /**
@@ -48,36 +50,99 @@ export class HUDManager {
         const turnPanel = this.scene.add.container(layout.WIDTH - 70, 25);
 
         const turnBgGraphics = this.scene.add.graphics();
-        turnBgGraphics.fillStyle(COLORS.PANEL_BG, 0.95);
-        turnBgGraphics.lineStyle(1, COLORS.PANEL_BORDER);
-        turnBgGraphics.fillRoundedRect(-60, -16, 120, 32, 8);
-        turnBgGraphics.strokeRoundedRect(-60, -16, 120, 32, 8);
 
         this.hudTurn = this.scene.add.text(0, -1, "Your Turn", {
             ...FONTS.LABEL,
-            fontSize: "13px"
+            fontSize: "12px",
+            fontStyle: "700",
+            stroke: "#000000",
+            strokeThickness: 1
         }).setOrigin(0.5);
+        this.hudTurn.setShadow(0, 1, "#000000", 2, true, true);
         this.turnBg = turnBgGraphics;
         this.turnPanel = turnPanel;
         turnPanel.add([turnBgGraphics, this.hudTurn]);
 
         // Turn glow indicator
         this.turnGlow = this.scene.add.graphics();
-        this.turnGlow.lineStyle(2, 0x4a90d9);
-        this.turnGlow.strokeRoundedRect(layout.WIDTH - 70 - 62, 25 - 18, 124, 36, 10);
         this.turnGlow.setAlpha(0);
+        this.applyTurnPanelStyle(COLORS.SUCCESS, 0x43a047, this.turnLabelRaw);
+    }
+
+    /**
+     * Truncate text to fit max pixel width.
+     * @param {string} text - Input text.
+     * @param {number} maxWidth - Pixel width budget.
+     * @returns {string}
+     */
+    fitTurnText(text, maxWidth) {
+        if (!this.hudTurn) return text;
+
+        this.hudTurn.setText(text);
+        if (this.hudTurn.width <= maxWidth) return text;
+
+        const source = String(text || "");
+        let lo = 1;
+        let hi = source.length;
+        let best = source.slice(0, 1) + "...";
+
+        while (lo <= hi) {
+            const mid = Math.floor((lo + hi) / 2);
+            const candidate = `${source.slice(0, mid).trimEnd()}...`;
+            this.hudTurn.setText(candidate);
+            if (this.hudTurn.width <= maxWidth) {
+                best = candidate;
+                lo = mid + 1;
+            } else {
+                hi = mid - 1;
+            }
+        }
+
+        return best;
+    }
+
+    /**
+     * Draw turn panel background + glow to current dynamic dimensions.
+     * @param {number} borderHex - Border color.
+     */
+    redrawTurnDecor(borderHex) {
+        const layout = this.getLayout();
+        const panelHeight = 34;
+        const panelRadius = 10;
+        const halfW = this.turnPanelWidth / 2;
+        const halfH = panelHeight / 2;
+
+        this.turnPanel.setPosition(layout.WIDTH - 10 - halfW, 25);
+
+        this.turnBg.clear();
+        this.turnBg.fillStyle(0x101823, 0.88);
+        this.turnBg.lineStyle(2, borderHex, 0.9);
+        this.turnBg.fillRoundedRect(-halfW, -halfH, this.turnPanelWidth, panelHeight, panelRadius);
+        this.turnBg.strokeRoundedRect(-halfW, -halfH, this.turnPanelWidth, panelHeight, panelRadius);
+        this.turnBg.lineStyle(1, 0xffffff, 0.08);
+        this.turnBg.strokeRoundedRect(-halfW + 1, -halfH + 1, this.turnPanelWidth - 2, panelHeight - 2, panelRadius - 1);
     }
 
     /**
      * Apply turn panel border/text color without requiring turn text changes.
      */
-    applyTurnPanelStyle(turnColor, turnColorHex) {
+    applyTurnPanelStyle(turnColor, turnColorHex, rawLabel = this.turnLabelRaw || "Turn") {
+        if (!this.hudTurn || !this.turnBg || !this.turnPanel) return;
+
+        const layout = this.getLayout();
+        const horizontalPadding = 18;
+        const minWidth = 120;
+        const maxWidth = Math.max(minWidth, Math.floor(layout.WIDTH * 0.74));
+
+        const fittedLabel = this.fitTurnText(rawLabel, maxWidth - (horizontalPadding * 2));
+        this.hudTurn.setText(fittedLabel);
         this.hudTurn.setColor(turnColor);
-        this.turnBg.clear();
-        this.turnBg.fillStyle(COLORS.PANEL_BG, 0.95);
-        this.turnBg.lineStyle(1, turnColorHex);
-        this.turnBg.fillRoundedRect(-60, -16, 120, 32, 8);
-        this.turnBg.strokeRoundedRect(-60, -16, 120, 32, 8);
+        this.turnPanelWidth = Phaser.Math.Clamp(
+            Math.ceil(this.hudTurn.width + (horizontalPadding * 2)),
+            minWidth,
+            maxWidth
+        );
+        this.redrawTurnDecor(turnColorHex);
         this.lastTurnBorderHex = turnColorHex;
     }
 
@@ -85,8 +150,6 @@ export class HUDManager {
      * Update HUD with current game state
      */
     update(state) {
-        const layout = this.getLayout();
-
         // Update round text with animation
         if (this.hudRound) {
             const newRoundText = `Round ${state.roundNumber}`;
@@ -104,25 +167,29 @@ export class HUDManager {
         // Update turn indicator with animation
         if (this.hudTurn) {
             const currentActor = state.players[state.currentTurnIndex];
-            const myUserId = this.scene.getMyUserId?.();
+            if (!currentActor) {
+                this.turnLabelRaw = "Waiting...";
+                this.applyTurnPanelStyle(COLORS.TEXT_PRIMARY, COLORS.PANEL_BORDER);
+                return;
+            }
             const isMyTurn = this.scene.isMultiplayer
                 ? !!this.scene.gameStore?.isMyTurn
                 : currentActor.id === "YOU";
 
-            const turnName = isMyTurn
-                ? "Your Turn"
-                : (this.scene.isMultiplayer ? "Opponent Turn" : "Dealer's Turn");
+            let turnName = "Dealer's Turn";
+            if (isMyTurn) {
+                turnName = "Your Turn";
+            } else if (this.scene.isMultiplayer) {
+                const actorName = currentActor.displayName || currentActor.name || currentActor.id || "Opponent";
+                turnName = `${actorName} Turn`;
+            }
             const turnColor = isMyTurn ? COLORS.SUCCESS : COLORS.DANGER;
             const turnColorHex = isMyTurn ? 0x43a047 : 0xc62828;
-            const textChanged = this.hudTurn.text !== turnName;
-            const borderChanged = this.lastTurnBorderHex !== turnColorHex;
+            const textChanged = this.turnLabelRaw !== turnName;
 
             if (!textChanged) {
-                if (borderChanged) {
-                    this.applyTurnPanelStyle(turnColor, turnColorHex);
-                } else {
-                    this.hudTurn.setColor(turnColor);
-                }
+                // Keep panel adaptive on resizes and keep style polished each frame.
+                this.applyTurnPanelStyle(turnColor, turnColorHex, this.turnLabelRaw);
             }
 
             if (textChanged) {
@@ -131,8 +198,8 @@ export class HUDManager {
                     alpha: { from: 1, to: 0 },
                     duration: 120,
                     onComplete: () => {
-                        this.hudTurn.setText(turnName);
-                        this.applyTurnPanelStyle(turnColor, turnColorHex);
+                        this.turnLabelRaw = turnName;
+                        this.applyTurnPanelStyle(turnColor, turnColorHex, turnName);
 
                         this.scene.tweens.add({
                             targets: [this.hudTurn, this.turnBg],
@@ -144,7 +211,9 @@ export class HUDManager {
                         if (isMyTurn) {
                             this.turnGlow.clear();
                             this.turnGlow.lineStyle(2, 0x43a047);
-                            this.turnGlow.strokeRoundedRect(layout.WIDTH - 70 - 62, 25 - 18, 124, 36, 10);
+                            const glowWidth = this.turnPanelWidth + 6;
+                            const glowX = this.turnPanel.x - (glowWidth / 2);
+                            this.turnGlow.strokeRoundedRect(glowX, 25 - 18, glowWidth, 36, 11);
 
                             this.turnGlow.setAlpha(0.8);
                             this.scene.tweens.add({
