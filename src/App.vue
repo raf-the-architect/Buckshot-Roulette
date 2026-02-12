@@ -10,6 +10,7 @@
     <StartScreen 
       v-else-if="currentScreen === 'start'" 
       v-model="playerName" 
+      :initial-room-code="pendingJoinCode"
       @start-game="onStartGame"
       @create-room="onCreateRoom"
       @join-room="onJoinRoom"
@@ -65,12 +66,12 @@
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount, computed, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/authStore';
 import { useRoomStore } from '@/stores/roomStore';
 import { useGameStore } from '@/stores/gameStore';
 import { createLogger } from '@/utils/logger';
-import { MAX_PLAYERS, MIN_PLAYERS } from '@/utils/constants';
+import { MAX_PLAYERS, MIN_PLAYERS, ROOM_STATUS } from '@/utils/constants';
 
 // Components
 import StartScreen from '@/screens/StartScreen.vue';
@@ -83,6 +84,7 @@ const authStore = useAuthStore();
 const roomStore = useRoomStore();
 const gameStore = useGameStore();
 const route = useRoute();
+const router = useRouter();
 const logger = createLogger('App');
 
 // =========================================================================
@@ -90,6 +92,7 @@ const logger = createLogger('App');
 // =========================================================================
 const currentScreen = ref('start');
 const playerName = ref('');
+const pendingJoinCode = ref('');
 const phaserGame = ref(null);
 const isReady = ref(false);
 const isMultiplayer = ref(false);
@@ -104,6 +107,8 @@ const viewportCleanup = [];
 let syncTicker = null;
 let disposePwa = null;
 const MAX_RENDER_DPR = 2;
+const PLAYER_NAME_STORAGE_KEY = 'buckshot_player_name';
+const ACTIVE_ROOM_STORAGE_KEY = 'buckshot_active_room';
 
 function getCappedDevicePixelRatio() {
   return Math.min(MAX_RENDER_DPR, Math.max(1, window.devicePixelRatio || 1));
@@ -149,6 +154,87 @@ function timestampToMillis(value) {
   }
   const parsed = Date.parse(value);
   return Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function normalizePlayerName(value) {
+  return String(value || '').trim().slice(0, 12);
+}
+
+function normalizeRoomCode(value) {
+  return String(value || '').trim().toUpperCase().slice(0, 6);
+}
+
+function rememberPlayerName(value) {
+  const normalized = normalizePlayerName(value);
+  if (!normalized) return '';
+  localStorage.setItem(PLAYER_NAME_STORAGE_KEY, normalized);
+  playerName.value = normalized;
+  return normalized;
+}
+
+function rememberActiveRoom(roomCode) {
+  const normalized = normalizeRoomCode(roomCode);
+  if (!normalized) return '';
+  localStorage.setItem(ACTIVE_ROOM_STORAGE_KEY, normalized);
+  pendingJoinCode.value = normalized;
+  return normalized;
+}
+
+function clearActiveRoom() {
+  localStorage.removeItem(ACTIVE_ROOM_STORAGE_KEY);
+  pendingJoinCode.value = normalizeRoomCode(route.params.code);
+}
+
+async function ensureJoinRoute(roomCode, replace = true) {
+  const normalized = normalizeRoomCode(roomCode);
+  if (!normalized) return;
+
+  const currentCode = normalizeRoomCode(route.params.code);
+  if (currentCode === normalized) return;
+
+  const target = { name: 'Join', params: { code: normalized } };
+  try {
+    if (replace) {
+      await router.replace(target);
+    } else {
+      await router.push(target);
+    }
+  } catch (err) {
+    logger.debug('join_route_sync_failed', {
+      roomCode: normalized,
+      error: err?.message || String(err)
+    });
+  }
+}
+
+async function ensureHomeRoute(replace = true) {
+  if (!route.params.code) return;
+  try {
+    if (replace) {
+      await router.replace({ name: 'Home' });
+    } else {
+      await router.push({ name: 'Home' });
+    }
+  } catch (err) {
+    logger.debug('home_route_sync_failed', { error: err?.message || String(err) });
+  }
+}
+
+async function syncMultiplayerDisplayName(name) {
+  if (name !== authStore.displayName) {
+    await authStore.updateDisplayName(name);
+  }
+}
+
+async function requireMultiplayerPlayerName() {
+  const name = normalizePlayerName(playerName.value);
+  if (!name) {
+    alert('Please enter a player name before creating or joining a room.');
+    return null;
+  }
+  rememberPlayerName(name);
+  await syncMultiplayerDisplayName(name);
+  return name;
 }
 
 const startSyncPhase = computed(() => gameStore.startSync?.phase || null);
@@ -232,23 +318,31 @@ onMounted(async () => {
     logger.info('single_player_available_without_auth');
   }
   
-  // Load saved player name or use Firebase display name
-  const savedName = localStorage.getItem('buckshot_player_name');
+  // Load saved player name only (no auto-generated default prefill).
+  const savedName = normalizePlayerName(localStorage.getItem(PLAYER_NAME_STORAGE_KEY));
   if (savedName) {
     playerName.value = savedName;
-  } else if (authStore.displayName && authStore.displayName !== 'Guest') {
-    playerName.value = authStore.displayName;
   }
+
+  const routeRoomCode = normalizeRoomCode(route.params.code);
+  const storedActiveRoomCode = normalizeRoomCode(localStorage.getItem(ACTIVE_ROOM_STORAGE_KEY));
+  pendingJoinCode.value = routeRoomCode || storedActiveRoomCode;
 
   // Listen for game-over event from Phaser
   window.addEventListener('game-over', onGameOver);
 
-  // Check for room join from URL (only if auth succeeded)
-  if (route.params.code && authStore.isAuthenticated) {
+  // Auto-resume join from URL or last active room when a saved name exists.
+  const autoJoinCode = routeRoomCode || storedActiveRoomCode;
+  if (autoJoinCode && savedName && authStore.isAuthenticated) {
     try {
-      await handleJoinFromUrl(route.params.code);
+      await syncMultiplayerDisplayName(savedName);
+      await handleJoinFromUrl(autoJoinCode);
+      await ensureJoinRoute(autoJoinCode);
     } catch (joinErr) {
-      logger.warn('join_from_url_failed', { error: joinErr.message });
+      logger.warn('auto_resume_failed', { roomCode: autoJoinCode, error: joinErr.message });
+      if (!routeRoomCode) {
+        clearActiveRoom();
+      }
     }
   }
 
@@ -280,8 +374,13 @@ onBeforeUnmount(() => {
  * Handle single-player game start
  */
 async function onStartGame({ onSuccess }) {
-  const name = playerName.value.trim() || 'PLAYER';
-  localStorage.setItem('buckshot_player_name', name);
+  const name = normalizePlayerName(playerName.value);
+  if (!name) {
+    onSuccess?.();
+    return;
+  }
+
+  rememberPlayerName(name);
 
   isStartLeaving.value = true;
   isMultiplayer.value = false;
@@ -305,14 +404,12 @@ async function onCreateRoom() {
   }
 
   try {
-    const name = playerName.value.trim() || authStore.displayName;
-    localStorage.setItem('buckshot_player_name', name);
-    
-    if (name !== authStore.displayName) {
-      await authStore.updateDisplayName(name);
-    }
+    const name = await requireMultiplayerPlayerName();
+    if (!name) return;
 
-    await roomStore.createRoom({ maxPlayers: MAX_PLAYERS });
+    const createdRoomCode = await roomStore.createRoom({ maxPlayers: MAX_PLAYERS });
+    rememberActiveRoom(createdRoomCode);
+    await ensureJoinRoute(createdRoomCode);
     isMultiplayer.value = true;
     currentScreen.value = 'lobby';
   } catch (err) {
@@ -332,14 +429,13 @@ async function onJoinRoom(roomCode) {
   }
 
   try {
-    const name = playerName.value.trim() || authStore.displayName;
-    localStorage.setItem('buckshot_player_name', name);
-    
-    if (name !== authStore.displayName) {
-      await authStore.updateDisplayName(name);
-    }
+    const name = await requireMultiplayerPlayerName();
+    if (!name) return;
 
-    await roomStore.joinRoom(roomCode);
+    const normalizedCode = normalizeRoomCode(roomCode);
+    await roomStore.joinRoom(normalizedCode);
+    rememberActiveRoom(normalizedCode);
+    await ensureJoinRoute(normalizedCode);
     isMultiplayer.value = true;
     currentScreen.value = 'lobby';
   } catch (err) {
@@ -352,13 +448,16 @@ async function onJoinRoom(roomCode) {
  * Handle join from URL parameter
  */
 async function handleJoinFromUrl(code) {
-  try {
-    await roomStore.joinRoom(code);
-    isMultiplayer.value = true;
-    currentScreen.value = 'lobby';
-  } catch (err) {
-    logger.error('join_from_url_failed', { error: err.message });
+  const normalizedCode = normalizeRoomCode(code);
+  if (!normalizedCode) {
+    throw new Error('Invalid room code');
   }
+
+  await roomStore.joinRoom(normalizedCode);
+  rememberActiveRoom(normalizedCode);
+  await ensureJoinRoute(normalizedCode);
+  isMultiplayer.value = true;
+  currentScreen.value = 'lobby';
 }
 
 /**
@@ -440,6 +539,8 @@ async function waitForGameReady(roomId, timeoutMs = 10000) {
  */
 async function onLeaveLobby() {
   await roomStore.leaveRoom();
+  clearActiveRoom();
+  await ensureHomeRoute();
   isMultiplayer.value = false;
   currentScreen.value = 'start';
 }
@@ -480,10 +581,16 @@ async function onReplay() {
 /**
  * Handle quit
  */
-function onQuit() {
+async function onQuit() {
   destroyPhaser();
   gameStore.leaveGame();
-  roomStore.leaveRoom();
+  try {
+    await roomStore.leaveRoom();
+  } catch (err) {
+    logger.warn('quit_leave_room_failed', { error: err.message });
+  }
+  clearActiveRoom();
+  await ensureHomeRoute();
   isMultiplayer.value = false;
   currentScreen.value = 'start';
 }
@@ -643,8 +750,6 @@ watch(showStartSyncOverlay, (visible) => {
 }, { immediate: true });
 
 // Watch for room status to start game (for clients and host sync)
-import { ROOM_STATUS } from '@/utils/constants';
-
 watch(() => roomStore.currentRoom?.status, (status) => {
   if (status === ROOM_STATUS.PLAYING && currentScreen.value === 'lobby') {
     logger.info('room_status_playing', { roomId: roomStore.roomId });

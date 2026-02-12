@@ -35,7 +35,7 @@
         <div class="multiplayer-section">
           <button 
             class="start-btn create-room" 
-            :disabled="isLoading" 
+            :disabled="!canMultiplayer || isLoading" 
             @click="handleCreateRoom"
           >
             🌐 Create Room
@@ -53,7 +53,7 @@
             />
             <button 
               class="join-btn" 
-              :disabled="!roomCode.trim() || isLoading" 
+              :disabled="!canMultiplayer || !roomCode.trim() || isLoading" 
               @click="handleJoinRoom"
             >
               Join
@@ -68,10 +68,14 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 
 const props = defineProps({
   modelValue: {
+    type: String,
+    default: ''
+  },
+  initialRoomCode: {
     type: String,
     default: ''
   }
@@ -89,6 +93,21 @@ const playerNameProxy = computed({
 });
 
 const canStart = computed(() => props.modelValue.trim().length > 0);
+const canMultiplayer = computed(() => canStart.value);
+
+const normalizeRoomCode = (value) => String(value || '')
+  .trim()
+  .toUpperCase()
+  .slice(0, 6);
+
+watch(
+  () => props.initialRoomCode,
+  (nextCode) => {
+    const normalized = normalizeRoomCode(nextCode);
+    roomCode.value = normalized;
+  },
+  { immediate: true }
+);
 
 function handleSinglePlayer() {
   if (!canStart.value || isLoading.value) return;
@@ -102,12 +121,12 @@ function handleSinglePlayer() {
 }
 
 function handleCreateRoom() {
-  if (isLoading.value) return;
+  if (!canMultiplayer.value || isLoading.value) return;
   emit('create-room');
 }
 
 function handleJoinRoom() {
-  if (!roomCode.value.trim() || isLoading.value) return;
+  if (!canMultiplayer.value || !roomCode.value.trim() || isLoading.value) return;
   emit('join-room', roomCode.value.trim().toUpperCase());
 }
 

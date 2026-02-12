@@ -40,6 +40,7 @@ const logger = createLogger('GameScene');
 const MULTIPLAYER_ACTION_ACK_TIMEOUT_MS = 8000;
 const MULTIPLAYER_ACTION_SYNC_LEAD_MS = 180;
 const MULTIPLAYER_ACTION_FALLBACK_DURATION_MS = 520;
+const REVEAL_SEEN_STORAGE_KEY = 'buckshot_seen_round_reveal';
 
 export class GameScene extends Phaser.Scene {
   constructor() {
@@ -60,6 +61,7 @@ export class GameScene extends Phaser.Scene {
     this.isPlayingMultiplayerAction = false;
     this.currentMatchId = null;
     this.lastStateVersion = -1;
+    this.bootstrapStateVersion = -1;
     this.bgImage = null;
     this.bgShade = null;
     this.resizeHandler = null;
@@ -87,6 +89,7 @@ export class GameScene extends Phaser.Scene {
     this.isPlayingMultiplayerAction = false;
     this.currentMatchId = this.gameStore?.currentGame?.matchId || null;
     this.lastStateVersion = -1;
+    this.bootstrapStateVersion = -1;
     this.localPlayerIndex = 0;
     this.lastAfkUiSyncAtMs = 0;
     this.pendingMultiplayerItemSelection = null;
@@ -293,6 +296,9 @@ export class GameScene extends Phaser.Scene {
         this.roundStartBlank = game.shotgun.blankRounds;
         this.roundStartTotal = game.shotgun.totalRounds || game.shotgun.chamber?.length || 0;
       }
+      this.bootstrapStateVersion = Number.isFinite(Number(game?.stateVersion))
+        ? Number(game.stateVersion)
+        : -1;
 
       if (!this.state) {
         logger.warn('multiplayer_state_placeholder_used');
@@ -438,11 +444,6 @@ export class GameScene extends Phaser.Scene {
     if (!this.gameStore.startGateOpen) return;
 
     this.multiplayerFlowStarted = true;
-
-    if (this.gameStore?.setClientRevealPhaseActive) {
-      this.gameStore.setClientRevealPhaseActive(true);
-    }
-
     this.startMusicIfNeeded();
 
     logger.info('multiplayer_flow_started', {
@@ -450,11 +451,23 @@ export class GameScene extends Phaser.Scene {
       turnIndex: this.state?.currentTurnIndex
     });
 
+    const game = this.gameStore.currentGame;
     const hasAmmoData = (this.roundStartTotal || 0) > 0;
-    if (hasAmmoData) {
+    const shouldRevealRound = hasAmmoData && this.shouldPlayInitialRoundReveal(game);
+
+    if (shouldRevealRound) {
+      if (this.gameStore?.setClientRevealPhaseActive) {
+        this.gameStore.setClientRevealPhaseActive(true);
+      }
       this.lastRevealedRoundNumber = this.state.roundNumber;
       this.round.startAmmoReveal();
       return;
+    }
+
+    this.lastRevealedRoundNumber = this.state?.roundNumber ?? null;
+    this.ammoRevealPhase = false;
+    if (hasAmmoData) {
+      this.syncFiredShotsFromActionHistory(game);
     }
 
     if (this.gameStore?.setClientRevealPhaseActive) {
@@ -601,6 +614,15 @@ export class GameScene extends Phaser.Scene {
         this.processNewMultiplayerActions();
         this.releaseStalePendingAction();
         this.maybeStartMultiplayerFlow();
+        const canHydrateShots =
+          this.multiplayerFlowStarted &&
+          !this.ammoRevealPhase &&
+          !this.betweenRounds &&
+          !this.isPlayingMultiplayerAction &&
+          this.multiplayerActionQueue.length === 0;
+        if (canHydrateShots && this.syncFiredShotsFromActionHistory(game)) {
+          this.render();
+        }
         return;
       }
 
@@ -657,6 +679,15 @@ export class GameScene extends Phaser.Scene {
         return;
       }
 
+      const canHydrateShots =
+        !this.ammoRevealPhase &&
+        !this.betweenRounds &&
+        !this.isPlayingMultiplayerAction &&
+        this.multiplayerActionQueue.length === 0;
+      if (canHydrateShots) {
+        this.syncFiredShotsFromActionHistory(game);
+      }
+
       if (game.turnNumber !== lastTurnNumber) {
         this.clearTargetSelection();
         logger.info('turn_changed', {
@@ -700,8 +731,19 @@ export class GameScene extends Phaser.Scene {
         continue;
       }
 
-      pending.push(action);
       this.acknowledgePendingMultiplayerAction(action);
+
+      const actionStateVersion = Number(action.stateVersion);
+      const hasActionStateVersion = Number.isFinite(actionStateVersion);
+      const isBootstrapHistory =
+        hasActionStateVersion &&
+        this.bootstrapStateVersion >= 0 &&
+        actionStateVersion <= this.bootstrapStateVersion;
+      if (isBootstrapHistory) {
+        continue;
+      }
+
+      pending.push(action);
     }
 
     if (pending.length > 0) {
@@ -737,6 +779,184 @@ export class GameScene extends Phaser.Scene {
     }
     const parsed = Date.parse(value);
     return Number.isNaN(parsed) ? 0 : parsed;
+  }
+
+  /**
+   * Read last seen reveal marker from local storage.
+   * @returns {{matchId: string, roundNumber: number} | null}
+   */
+  getSeenRoundRevealMarker() {
+    try {
+      const raw = localStorage.getItem(REVEAL_SEEN_STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      const roundNumber = Number(parsed?.roundNumber);
+      if (!parsed?.matchId || !Number.isFinite(roundNumber) || roundNumber <= 0) {
+        return null;
+      }
+      return {
+        matchId: String(parsed.matchId),
+        roundNumber
+      };
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  /**
+   * Persist reveal marker for current match/round.
+   * @param {number} roundNumber - Round number that has been revealed.
+   */
+  markRoundRevealSeen(roundNumber) {
+    const game = this.gameStore?.currentGame;
+    const matchId = game?.matchId || this.currentMatchId || null;
+    const normalizedRound = Number(roundNumber || game?.currentRound || this.state?.roundNumber || 0);
+    if (!matchId || !Number.isFinite(normalizedRound) || normalizedRound <= 0) return;
+
+    try {
+      localStorage.setItem(REVEAL_SEEN_STORAGE_KEY, JSON.stringify({
+        matchId,
+        roundNumber: normalizedRound
+      }));
+    } catch (_err) {
+      // Ignore storage quota/private mode failures.
+    }
+  }
+
+  /**
+   * Return true when reveal for a specific match round was already seen by this client.
+   * @param {string | null} matchId - Match identifier.
+   * @param {number} roundNumber - Round number.
+   * @returns {boolean}
+   */
+  hasSeenRoundReveal(matchId, roundNumber) {
+    if (!matchId) return false;
+    const marker = this.getSeenRoundRevealMarker();
+    if (!marker) return false;
+    return marker.matchId === matchId && Number(marker.roundNumber) === Number(roundNumber);
+  }
+
+  /**
+   * Get current match action feed sorted deterministically.
+   * @param {object | null} game - Game snapshot.
+   * @returns {Array<object>}
+   */
+  getSortedCurrentMatchActions(game = this.gameStore?.currentGame) {
+    const actions = Array.isArray(this.gameStore?.gameActions) ? [...this.gameStore.gameActions] : [];
+    const matchId = game?.matchId || this.currentMatchId || null;
+
+    const filtered = actions.filter((action) => {
+      if (!action?.id) return false;
+      if (!matchId) return true;
+      return !action.matchId || action.matchId === matchId;
+    });
+
+    filtered.sort((a, b) => {
+      const av = Number.isFinite(Number(a.stateVersion)) ? Number(a.stateVersion) : Number.MAX_SAFE_INTEGER;
+      const bv = Number.isFinite(Number(b.stateVersion)) ? Number(b.stateVersion) : Number.MAX_SAFE_INTEGER;
+      if (av !== bv) return av - bv;
+      return this.timestampToMillis(a.timestamp) - this.timestampToMillis(b.timestamp);
+    });
+
+    return filtered;
+  }
+
+  /**
+   * Rebuild consumed round history (live/blank) for the active round from authoritative actions.
+   * @param {object | null} game - Game snapshot.
+   * @returns {Array<{wasLive: boolean, damage: number}>}
+   */
+  buildFiredShotsFromActionHistory(game = this.gameStore?.currentGame) {
+    if (!game) return [];
+
+    const currentRound = Number(game.currentRound || this.state?.roundNumber || 1);
+    const actions = this.getSortedCurrentMatchActions(game);
+    const rebuilt = [];
+
+    for (const action of actions) {
+      const result = action?.result || {};
+      const roundBefore = Number(result.roundBefore ?? action.roundNumber ?? currentRound);
+      if (roundBefore !== currentRound) continue;
+
+      if (action.type === 'shoot') {
+        if (result.roundType === 'live' || result.roundType === 'blank') {
+          rebuilt.push({
+            wasLive: result.roundType === 'live',
+            damage: Number(result.damage) || 0
+          });
+        }
+        continue;
+      }
+
+      if (action.type === 'item_use') {
+        if (result.ejectedRound === 'live' || result.ejectedRound === 'blank') {
+          rebuilt.push({
+            wasLive: result.ejectedRound === 'live',
+            damage: 0
+          });
+        }
+      }
+    }
+
+    return rebuilt;
+  }
+
+  /**
+   * Reconcile local fired shot visuals with authoritative action history.
+   * @param {object | null} game - Game snapshot.
+   * @returns {boolean} True when local display state changed.
+   */
+  syncFiredShotsFromActionHistory(game = this.gameStore?.currentGame) {
+    if (!game) return false;
+
+    const rebuilt = this.buildFiredShotsFromActionHistory(game);
+    const sameShots =
+      rebuilt.length === this.firedShots.length &&
+      rebuilt.every((shot, index) => shot.wasLive === this.firedShots[index]?.wasLive);
+
+    const myUserId = this.getMyUserId();
+    const revealOwnerId = game.turnContext?.playerId || game.players?.[game.currentTurn]?.userId || null;
+    const revealedRound = game.turnContext?.revealedRound;
+    const restoredReveal =
+      revealOwnerId === myUserId && (revealedRound === 'live' || revealedRound === 'blank')
+        ? revealedRound
+        : null;
+
+    const sameReveal = this.nextAmmoRevealed === restoredReveal;
+    if (sameShots && sameReveal) return false;
+
+    if (!sameShots) {
+      this.firedShots = rebuilt;
+    }
+
+    this.nextAmmoRevealed = restoredReveal;
+    if (!restoredReveal) {
+      this.gun.hideNextAmmo();
+    }
+
+    return true;
+  }
+
+  /**
+   * Determine whether initial round reveal should play for this scene bootstrap.
+   * @param {object | null} game - Game snapshot.
+   * @returns {boolean}
+   */
+  shouldPlayInitialRoundReveal(game = this.gameStore?.currentGame) {
+    if (!game) return false;
+
+    const roundNumber = Number(game.currentRound || this.state?.roundNumber || 1);
+    const turnNumber = Number(game.turnNumber || 0);
+    const totalRounds = Number(game.shotgun?.totalRounds || 0);
+    const chamberLength = Number(game.shotgun?.chamber?.length || 0);
+    const consumedInRound = Math.max(0, totalRounds - chamberLength);
+    const matchId = game.matchId || this.currentMatchId || null;
+
+    if (this.hasSeenRoundReveal(matchId, roundNumber)) {
+      return false;
+    }
+
+    return turnNumber === 0 && consumedInRound === 0;
   }
 
   /**

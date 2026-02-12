@@ -39,6 +39,9 @@ export class RoundManager {
         scene.nextAmmoRevealed = null;
         scene.gun.hideNextAmmo();
         scene.gun.resetAngles();
+        if (typeof scene.markRoundRevealSeen === "function") {
+            scene.markRoundRevealSeen(scene.state?.roundNumber);
+        }
 
         logger.info("round_reveal_started", {
             liveRounds: scene.roundStartLive,

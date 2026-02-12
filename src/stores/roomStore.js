@@ -264,10 +264,92 @@ export const useRoomStore = defineStore('room', () => {
             }
 
             const roomData = roomSnap.data();
+            const playerRef = doc(db, 'rooms', normalizedCode, 'players', authStore.userId);
+            const playerSnap = await getDoc(playerRef);
+            const roomPlayerList = Array.isArray(roomData.playerList) ? roomData.playerList : [];
+            const roomPlayerIds = Array.isArray(roomData.playerIds) ? roomData.playerIds : [];
+            const existingEntry = roomPlayerList.find(p => p.userId === authStore.userId) || null;
+            const isExistingPlayer =
+                playerSnap.exists() ||
+                !!existingEntry ||
+                roomPlayerIds.includes(authStore.userId);
+
+            // Allow reconnect/rejoin for existing room members even while game is already playing.
+            if (isExistingPlayer) {
+                if (roomData.status === ROOM_STATUS.ENDED) {
+                    throw new Error('Game has ended');
+                }
+
+                const updatedPlayerList = [...roomPlayerList];
+                const isHostPlayer = roomData.hostId === authStore.userId;
+
+                let slotIndex = Number(existingEntry?.slotIndex);
+                if (!Number.isFinite(slotIndex) || slotIndex < 0) {
+                    const occupiedSlots = updatedPlayerList
+                        .filter(p => p.userId !== authStore.userId)
+                        .map(p => Number(p.slotIndex))
+                        .filter(n => Number.isFinite(n) && n >= 0);
+                    slotIndex = 0;
+                    while (occupiedSlots.includes(slotIndex)) slotIndex++;
+                }
+
+                const joinedAt = existingEntry?.joinedAt || new Date().toISOString();
+                const nextEntry = {
+                    userId: authStore.userId,
+                    displayName: authStore.displayName,
+                    isHost: isHostPlayer,
+                    isReady: true,
+                    slotIndex,
+                    joinedAt
+                };
+
+                if (existingEntry) {
+                    const index = updatedPlayerList.findIndex(p => p.userId === authStore.userId);
+                    updatedPlayerList[index] = {
+                        ...updatedPlayerList[index],
+                        ...nextEntry
+                    };
+                } else {
+                    updatedPlayerList.push(nextEntry);
+                }
+
+                const mergedPlayerIds = roomPlayerIds.includes(authStore.userId)
+                    ? roomPlayerIds
+                    : [...roomPlayerIds, authStore.userId];
+
+                const batch = writeBatch(db);
+                batch.set(playerRef, {
+                    userId: authStore.userId,
+                    displayName: authStore.displayName,
+                    isHost: isHostPlayer,
+                    isReady: true,
+                    slotIndex,
+                    joinedAt: playerSnap.data()?.joinedAt || serverTimestamp(),
+                    lastPing: serverTimestamp(),
+                    status: 'active'
+                }, { merge: true });
+
+                const roomPatch = {
+                    playerList: updatedPlayerList,
+                    updatedAt: serverTimestamp()
+                };
+
+                if (!roomPlayerIds.includes(authStore.userId) || !existingEntry) {
+                    roomPatch.playerIds = mergedPlayerIds;
+                    roomPatch.currentPlayers = Math.max(
+                        Number(roomData.currentPlayers) || 0,
+                        updatedPlayerList.length
+                    );
+                }
+
+                batch.update(roomRef, roomPatch);
+                await batch.commit();
+                await subscribeToRoom(normalizedCode);
+                return 'player';
+            }
 
             if (roomData.status !== ROOM_STATUS.WAITING) {
                 if (roomData.status === ROOM_STATUS.PLAYING) {
-                    // Could join as spectator - for now throw error
                     throw new Error('Game already in progress');
                 }
                 throw new Error('Game has ended');
@@ -277,38 +359,15 @@ export const useRoomStore = defineStore('room', () => {
                 throw new Error('Room is full');
             }
 
-            // Check if already in room
-            const playerRef = doc(db, 'rooms', normalizedCode, 'players', authStore.userId);
-            const playerSnap = await getDoc(playerRef);
-
-            if (playerSnap.exists()) {
-                await updateDoc(playerRef, {
-                    isReady: true,
-                    lastPing: serverTimestamp()
-                });
-
-                const updatedList = roomData.playerList.map(p =>
-                    p.userId === authStore.userId ? { ...p, isReady: true } : p
-                );
-                await updateDoc(roomRef, {
-                    playerList: updatedList,
-                    updatedAt: serverTimestamp()
-                });
-
-                // Already in room, just subscribe
-                await subscribeToRoom(normalizedCode);
-                return 'player';
-            }
-
             // Find available slot
-            const existingSlots = roomData.playerList.map(p => p.slotIndex || 0);
+            const existingSlots = roomPlayerList.map(p => p.slotIndex || 0);
             let slotIndex = 0;
             while (existingSlots.includes(slotIndex)) slotIndex++;
 
             const batch = writeBatch(db);
 
             // Update room's playerList
-            const updatedPlayerList = [...roomData.playerList, {
+            const updatedPlayerList = [...roomPlayerList, {
                 userId: authStore.userId,
                 displayName: authStore.displayName,
                 isHost: false,
@@ -319,7 +378,7 @@ export const useRoomStore = defineStore('room', () => {
 
             batch.update(roomRef, {
                 playerList: updatedPlayerList,
-                playerIds: [...roomData.playerIds, authStore.userId],
+                playerIds: [...roomPlayerIds, authStore.userId],
                 currentPlayers: roomData.currentPlayers + 1,
                 updatedAt: serverTimestamp()
             });
