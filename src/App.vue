@@ -43,6 +43,22 @@
       v-show="currentScreen === 'game' || currentScreen === 'replay'"
     ></div>
 
+    <button
+      v-if="currentScreen === 'game'"
+      class="in-game-settings-btn"
+      type="button"
+      aria-label="Open game settings"
+      @click="showInGameSettings = true"
+    >
+      ⚙
+    </button>
+
+    <SettingsModal
+      v-model="showInGameSettings"
+      :show-leave-game="canLeaveCurrentMatch"
+      @leave-game="onLeaveCurrentMatch"
+    />
+
     <div v-if="showStartSyncOverlay" class="start-sync-overlay">
       <div class="start-sync-card">
         <div v-if="startSyncPhase === 'loading'" class="loading-spinner start-sync-spinner"></div>
@@ -83,6 +99,7 @@ import StartScreen from '@/screens/StartScreen.vue';
 import ReplayScreen from '@/screens/ReplayScreen.vue';
 import LobbyView from '@/components/LobbyView.vue';
 import BrandLogo from '@/components/ui/BrandLogo.vue';
+import SettingsModal from '@/components/SettingsModal.vue';
 import { registerServiceWorker } from '@/utils/pwa';
 
 // Stores
@@ -108,6 +125,7 @@ const gameResult = ref({
 });
 const isStartLeaving = ref(false);
 const isBootingMultiplayerGame = ref(false);
+const showInGameSettings = ref(false);
 const syncNow = ref(Date.now());
 const viewportCleanup = [];
 let syncTicker = null;
@@ -283,6 +301,12 @@ const showStartSyncOverlay = computed(() =>
   isMultiplayer.value &&
   currentScreen.value === 'game' &&
   !gameStore.startGateOpen
+);
+const canLeaveCurrentMatch = computed(() =>
+  isMultiplayer.value &&
+  currentScreen.value === 'game' &&
+  gameStore.isActive &&
+  !!gameStore.amAlive
 );
 
 const countdownRemaining = computed(() => {
@@ -581,6 +605,7 @@ async function waitForGameReady(roomId, timeoutMs = 10000) {
  * Leave lobby
  */
 async function onLeaveLobby() {
+  showInGameSettings.value = false;
   await roomStore.leaveRoom();
   clearActiveRoom();
   await ensureHomeRoute();
@@ -589,9 +614,30 @@ async function onLeaveLobby() {
 }
 
 /**
+ * Leave current active match without stopping the game for others.
+ * Marks local player as eliminated and keeps match running.
+ */
+async function onLeaveCurrentMatch() {
+  if (!canLeaveCurrentMatch.value) {
+    showInGameSettings.value = false;
+    return;
+  }
+
+  try {
+    await gameStore.leaveMatchAsDead();
+  } catch (err) {
+    logger.error('leave_current_match_failed', { error: err.message });
+    alert('Failed to leave current match: ' + err.message);
+  } finally {
+    showInGameSettings.value = false;
+  }
+}
+
+/**
  * Handle replay
  */
 async function onReplay() {
+  showInGameSettings.value = false;
   destroyPhaser();
 
   if (!isMultiplayer.value) {
@@ -625,6 +671,7 @@ async function onReplay() {
  * Handle quit
  */
 async function onQuit() {
+  showInGameSettings.value = false;
   destroyPhaser();
   gameStore.leaveGame();
   try {
@@ -642,6 +689,7 @@ async function onQuit() {
  * Handle game over event from Phaser
  */
 function onGameOver(event) {
+  showInGameSettings.value = false;
   const { isWin, playerName } = event.detail;
   gameResult.value = { isWin, playerName };
   currentScreen.value = 'replay';
@@ -799,6 +847,12 @@ watch(() => roomStore.currentRoom?.status, (status) => {
     onGameStarted();
   }
 });
+
+watch(() => currentScreen.value, (screen) => {
+  if (screen !== 'game') {
+    showInGameSettings.value = false;
+  }
+});
 </script>
 
 <style>
@@ -877,6 +931,28 @@ watch(() => roomStore.currentRoom?.status, (status) => {
   height: var(--app-height, 100dvh);
   min-height: var(--app-height, 100dvh);
   z-index: 0;
+}
+
+.in-game-settings-btn {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 0.7rem);
+  left: calc(env(safe-area-inset-left, 0px) + 0.7rem);
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  border: 2px solid rgba(67, 118, 178, 0.46);
+  background: linear-gradient(180deg, rgba(254, 243, 216, 0.96) 0%, rgba(240, 220, 171, 0.96) 100%);
+  color: var(--bb-blue-900);
+  box-shadow: 0 8px 16px rgba(21, 57, 103, 0.34);
+  display: grid;
+  place-items: center;
+  font-size: 1.32rem;
+  cursor: pointer;
+  z-index: 18;
+}
+
+.in-game-settings-btn:active {
+  transform: translateY(1px);
 }
 
 .hidden {
@@ -981,6 +1057,13 @@ watch(() => roomStore.currentRoom?.status, (status) => {
 }
 
 @media (max-width: 640px) {
+  .in-game-settings-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    font-size: 1.18rem;
+  }
+
   .loading-card {
     gap: 0.8rem;
   }

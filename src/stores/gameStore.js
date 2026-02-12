@@ -1265,6 +1265,122 @@ export const useGameStore = defineStore('game', () => {
     };
 
     /**
+     * Surrender current match by marking the local player as dead.
+     * Game continues for remaining players.
+     * @returns {Promise<{changed: boolean, gameEnded?: boolean, alreadyDead?: boolean}>}
+     */
+    const leaveMatchAsDead = async () => {
+        const authStore = useAuthStore();
+        const actorUserId = authStore.userId;
+        const id = gameId.value;
+
+        if (!actorUserId || !id) {
+            return { changed: false };
+        }
+
+        const gameRef = doc(db, 'games', id);
+        const roomRef = doc(db, 'rooms', id);
+
+        const summary = await runTransaction(db, async (transaction) => {
+            const gameSnap = await transaction.get(gameRef);
+            if (!gameSnap.exists()) {
+                throw new Error('Game not found');
+            }
+
+            const game = gameSnap.data();
+            if (game.status !== 'active') {
+                return { changed: false, gameEnded: true };
+            }
+
+            const players = (game.players || []).map(p => ({
+                ...p,
+                items: [...(p.items || [])]
+            }));
+
+            const actorIndex = players.findIndex(p => p.userId === actorUserId);
+            if (actorIndex === -1) {
+                throw new Error('Player not in game');
+            }
+
+            const actor = players[actorIndex];
+            if (!actor.isAlive) {
+                return { changed: false, alreadyDead: true };
+            }
+
+            actor.isAlive = false;
+            actor.health = 0;
+            actor.items = [];
+            actor.pendingSkipTurns = 0;
+            actor.lastActionAt = new Date().toISOString();
+
+            const stateVersionAfter = Number(game.stateVersion || 0) + 1;
+            const alivePlayers = players.filter(p => p.isAlive);
+
+            let currentTurn = game.currentTurn;
+            let turnNumber = game.turnNumber || 0;
+            let turnContext = { ...(game.turnContext || {}) };
+            let turnStartedAt = game.turnStartedAt;
+            let status = game.status;
+            let winner = game.winner || null;
+            let endedAt = game.endedAt || null;
+            let gameEnded = false;
+
+            if (alivePlayers.length <= 1) {
+                status = 'ended';
+                winner = alivePlayers.length === 1
+                    ? {
+                        userId: alivePlayers[0].userId,
+                        displayName: alivePlayers[0].displayName
+                    }
+                    : null;
+                endedAt = serverTimestamp();
+                gameEnded = true;
+
+                transaction.update(roomRef, {
+                    status: 'ended',
+                    updatedAt: serverTimestamp()
+                });
+            } else {
+                const currentTurnPlayer = players[currentTurn];
+                if (!currentTurnPlayer?.isAlive) {
+                    const turnResolution = resolveNextTurn(players, currentTurn);
+                    currentTurn = turnResolution.nextTurn;
+                    turnNumber = (game.turnNumber || 0) + 1;
+                    turnContext = buildTurnContext(players[currentTurn].userId);
+                    turnStartedAt = serverTimestamp();
+                } else if (turnContext.playerId !== currentTurnPlayer.userId) {
+                    turnContext = {
+                        ...turnContext,
+                        playerId: currentTurnPlayer.userId
+                    };
+                }
+            }
+
+            transaction.update(gameRef, {
+                players,
+                currentTurn,
+                turnNumber,
+                turnContext,
+                turnStartedAt,
+                status,
+                winner,
+                endedAt,
+                stateVersion: stateVersionAfter,
+                updatedAt: serverTimestamp()
+            });
+
+            return {
+                changed: true,
+                gameEnded,
+                actorUserId
+            };
+        });
+
+        logger.info('leave_match_as_dead_applied', summary);
+        return summary;
+    };
+
+    /**
      * Leave current game and clear listeners.
      */
     const leaveGame = () => {
@@ -1323,6 +1439,7 @@ export const useGameStore = defineStore('game', () => {
         useItem,
         performShoot,
         endTurn,
+        leaveMatchAsDead,
         leaveGame
     };
 });

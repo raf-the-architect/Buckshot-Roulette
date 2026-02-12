@@ -52,7 +52,10 @@
           </section>
 
           <template #footer>
-            <div class="settings-actions">
+            <div class="settings-actions" :class="{ 'leave-enabled': showLeaveGame }">
+              <GameButton v-if="showLeaveGame" variant="danger" @click="leaveGame">
+                Leave Game
+              </GameButton>
               <GameButton variant="secondary" @click="close">Close</GameButton>
             </div>
           </template>
@@ -74,10 +77,14 @@ const props = defineProps({
   modelValue: {
     type: Boolean,
     default: false
+  },
+  showLeaveGame: {
+    type: Boolean,
+    default: false
   }
 });
 
-const emit = defineEmits(['update:modelValue']);
+const emit = defineEmits(['update:modelValue', 'leave-game']);
 
 const uiStore = useUIStore();
 
@@ -93,6 +100,10 @@ const sfxVolumePercent = computed({
 
 function close() {
   emit('update:modelValue', false);
+}
+
+function leaveGame() {
+  emit('leave-game');
 }
 </script>
 
@@ -145,7 +156,13 @@ function close() {
 }
 
 .settings-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.7rem;
+}
+
+.settings-actions.leave-enabled {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .settings-fade-enter-active,
@@ -159,6 +176,10 @@ function close() {
 }
 
 @media (max-width: 480px) {
+  .settings-actions.leave-enabled {
+    grid-template-columns: 1fr;
+  }
+
   .settings-toggle-row {
     grid-template-columns: 1fr;
   }

@@ -40,15 +40,6 @@
         :is-me="player.userId === authStore.userId"
         @kick="roomStore.kickPlayer(player.userId)"
       />
-
-      <div
-        v-for="n in emptySlots"
-        :key="'empty-' + n"
-        class="player-slot empty bb-panel"
-      >
-        <div class="empty-icon">+</div>
-        <span>Waiting for player...</span>
-      </div>
     </div>
 
     <GamePanel class="lobby-actions-panel" ribbon-text="Ready Check">
@@ -67,23 +58,24 @@
         >
           Not Ready
         </GameButton>
-
-        <GameButton
-          v-if="roomStore.isHost"
-          variant="secondary"
-          :disabled="!roomStore.canStart"
-          @click="startGame"
-        >
-          Start Match
-        </GameButton>
-
-        <GameButton variant="danger" @click="leaveRoom">Leave Room</GameButton>
       </div>
 
       <p v-if="!roomStore.canStart && roomStore.isHost" class="helper-text">
         {{ getStartHelperText }}
       </p>
     </GamePanel>
+
+    <div class="lobby-bottom-actions bb-panel" :class="{ host: roomStore.isHost }">
+      <GameButton
+        v-if="roomStore.isHost"
+        variant="secondary"
+        :disabled="!roomStore.canStart"
+        @click="startGame"
+      >
+        Start Match
+      </GameButton>
+      <GameButton variant="danger" @click="leaveRoom">Leave Room</GameButton>
+    </div>
 
     <SettingsModal v-model="showSettings" />
   </div>
@@ -94,7 +86,7 @@ import { computed, ref } from 'vue';
 import { useAuthStore } from '@/stores/authStore';
 import { useRoomStore } from '@/stores/roomStore';
 import { useGameStore } from '@/stores/gameStore';
-import { MIN_PLAYERS, MAX_PLAYERS } from '@/utils/constants';
+import { MIN_PLAYERS } from '@/utils/constants';
 import { createLogger } from '@/utils/logger';
 import BrandLogo from '@/components/ui/BrandLogo.vue';
 import GameButton from '@/components/ui/GameButton.vue';
@@ -113,11 +105,6 @@ const showSettings = ref(false);
 const isReady = computed(() => {
   const me = roomStore.roomPlayers.find((p) => p.userId === authStore.userId);
   return me?.isReady || false;
-});
-
-const emptySlots = computed(() => {
-  const max = roomStore.currentRoom?.maxPlayers || MAX_PLAYERS;
-  return Math.max(0, max - roomStore.roomPlayers.length);
 });
 
 const getStartHelperText = computed(() => {
@@ -176,7 +163,7 @@ const copyLink = async () => {
 <style scoped>
 .lobby-view {
   min-height: var(--app-height, 100dvh);
-  padding: 1rem;
+  padding: 1rem 1rem calc(7rem + env(safe-area-inset-bottom, 0px));
   display: grid;
   gap: 1rem;
   max-width: 980px;
@@ -258,34 +245,14 @@ const copyLink = async () => {
   gap: 0.85rem;
 }
 
-.player-slot.empty {
-  min-height: 132px;
-  display: grid;
-  justify-items: center;
-  align-content: center;
-  gap: 0.4rem;
-  color: var(--bb-text-secondary);
-}
-
-.empty-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: 1.3rem;
-  background: rgba(44, 113, 188, 0.12);
-  border: 2px solid rgba(66, 116, 176, 0.35);
-}
-
 .lobby-actions-panel {
-  margin-bottom: 0.6rem;
+  margin-bottom: 0;
 }
 
 .lobby-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.7rem;
+  grid-template-columns: 1fr;
+  gap: 0.6rem;
 }
 
 .helper-text {
@@ -296,17 +263,31 @@ const copyLink = async () => {
   font-weight: 700;
 }
 
+.lobby-bottom-actions {
+  position: sticky;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 0.45rem);
+  z-index: 8;
+  display: grid;
+  gap: 0.7rem;
+  padding: 0.75rem;
+  backdrop-filter: blur(4px);
+}
+
+.lobby-bottom-actions.host {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 @media (max-width: 700px) {
   .invite-link {
     grid-template-columns: 1fr;
   }
 
-  .lobby-actions {
-    grid-template-columns: 1fr;
-  }
-
   .lobby-toolbar {
     justify-content: center;
+  }
+
+  .lobby-bottom-actions.host {
+    grid-template-columns: 1fr;
   }
 }
 </style>
