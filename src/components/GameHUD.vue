@@ -1,15 +1,13 @@
 <template>
   <div class="game-hud">
-    <!-- Turn Timer -->
-    <TurnTimer 
+    <TurnTimer
       :time-remaining="gameStore.turnTimeRemaining"
       :is-my-turn="gameStore.isMyTurn"
       :has-limit="gameStore.hasTurnTimeLimit"
     />
 
-    <!-- Players Panel -->
     <div class="players-container">
-      <div 
+      <div
         v-for="player in gameStore.currentGame?.players"
         :key="player.userId"
         :class="[
@@ -29,7 +27,7 @@
         <div class="player-info">
           <span class="name">{{ player.displayName }}</span>
           <div class="health-bar">
-            <div 
+            <div
               class="health-fill"
               :style="{ width: (player.health / player.maxHealth * 100) + '%' }"
             />
@@ -37,10 +35,9 @@
           </div>
         </div>
 
-        <!-- Items display -->
         <div class="player-items">
           <span v-if="!isMe(player)" class="item-count">
-            {{ player.items?.length || 0 }} 📦
+            {{ player.items?.length || 0 }} items
           </span>
           <div v-else class="my-items">
             <button
@@ -50,6 +47,7 @@
               :class="{ selected: selectedItem === item }"
               class="item-btn"
               :title="getItemInfo(item).name"
+              type="button"
             >
               {{ getItemInfo(item).emoji }}
             </button>
@@ -58,50 +56,48 @@
       </div>
     </div>
 
-    <!-- Shotgun Status -->
-    <div class="shotgun-status">
+    <div class="shotgun-status bb-panel">
       <div class="rounds-info">
         <span class="live">🔴 {{ gameStore.currentGame?.shotgun?.liveRounds }} LIVE</span>
         <span class="blank">⚪ {{ gameStore.currentGame?.shotgun?.blankRounds }} BLANK</span>
         <span class="total">{{ gameStore.currentGame?.shotgun?.chamber?.length }} LEFT</span>
       </div>
       <div v-if="gameStore.currentGame?.shotgun?.isSawedOff" class="sawed-off">
-        🔪 SAWED OFF (2x DAMAGE)
+        🔪 Sawed Off (2x Damage)
       </div>
       <div v-if="revealedRound" class="revealed-round">
-        🔍 Next round is: {{ revealedRound === 'live' ? '🔴 LIVE' : '⚪ BLANK' }}
+        🔍 Next: {{ revealedRound === 'live' ? '🔴 LIVE' : '⚪ BLANK' }}
       </div>
     </div>
 
-    <!-- Action Buttons -->
     <div v-if="gameStore.isMyTurn && gameStore.amAlive" class="action-panel">
-      <button 
+      <button
         v-if="canShoot"
         @click="openTargetSelector"
-        class="btn-shoot"
+        class="bb-btn bb-btn--primary"
+        type="button"
       >
-        🔫 SHOOT
+        Shoot
       </button>
-      <button 
+      <button
         v-if="selectedItem"
         @click="useSelectedItem"
-        class="btn-item"
+        class="bb-btn bb-btn--secondary"
+        type="button"
       >
-        USE {{ getItemInfo(selectedItem).name.toUpperCase() }}
+        Use {{ getItemInfo(selectedItem).name }}
       </button>
     </div>
 
-    <!-- Not your turn indicator -->
-    <div v-else-if="!gameStore.amAlive" class="spectating-notice">
-      ☠️ You have been eliminated
+    <div v-else-if="!gameStore.amAlive" class="spectating-notice bb-panel">
+      Eliminated this round
     </div>
-    <div v-else class="waiting-notice">
-      Waiting for {{ currentPlayerName }}'s turn...
+    <div v-else class="waiting-notice bb-panel">
+      Waiting for {{ currentPlayerName }}...
     </div>
 
-    <!-- Target Selector Modal -->
     <div v-if="showTargetSelector" class="modal-overlay" @click.self="showTargetSelector = false">
-      <div class="target-selector">
+      <div class="target-selector bb-modal">
         <h3>Select Target</h3>
         <div class="targets-grid">
           <button
@@ -109,19 +105,21 @@
             :key="target.userId"
             @click="shootTarget(target.userId)"
             class="target-btn"
+            type="button"
           >
             {{ target.displayName }}
-            <span class="target-health">❤️ {{ target.health }}</span>
+            <span class="target-health">{{ target.health }} HP</span>
           </button>
           <button
             @click="shootTarget(authStore.userId)"
             class="target-btn self"
+            type="button"
           >
             Shoot Yourself
-            <span class="target-health">❤️ {{ gameStore.myPlayer?.health }}</span>
+            <span class="target-health">{{ gameStore.myPlayer?.health }} HP</span>
           </button>
         </div>
-        <button @click="showTargetSelector = false" class="btn-cancel">Cancel</button>
+        <button @click="showTargetSelector = false" class="bb-btn bb-btn--ghost" type="button">Cancel</button>
       </div>
     </div>
   </div>
@@ -163,7 +161,7 @@ const currentPlayerName = computed(() => {
 });
 
 const validTargets = computed(() => {
-  return gameStore.currentGame?.players.filter(p => 
+  return gameStore.currentGame?.players.filter((p) =>
     p.isAlive && p.userId !== authStore.userId
   ) || [];
 });
@@ -179,7 +177,6 @@ const selectItem = (item) => {
 const useSelectedItem = async () => {
   if (!selectedItem.value) return;
 
-  // Some items need target selection
   const needsTarget = ['handcuffs', 'adrenaline'].includes(selectedItem.value);
 
   if (needsTarget) {
@@ -202,9 +199,8 @@ const openTargetSelector = () => {
 
 const shootTarget = async (targetId) => {
   showTargetSelector.value = false;
-  
+
   try {
-    // If we had an item selected that needs target, use item instead
     if (selectedItem.value && ['handcuffs', 'adrenaline'].includes(selectedItem.value)) {
       await gameStore.useItem(selectedItem.value, targetId);
       selectedItem.value = null;
@@ -221,10 +217,7 @@ const shootTarget = async (targetId) => {
 <style scoped>
 .game-hud {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   pointer-events: none;
   z-index: 100;
 }
@@ -237,64 +230,64 @@ const shootTarget = async (targetId) => {
   display: flex;
   justify-content: center;
   gap: 0.5rem;
-  padding: 1rem;
+  padding: 0.9rem 0.65rem 0;
   flex-wrap: wrap;
 }
 
 .player-panel {
-  background: rgba(0, 0, 0, 0.8);
-  border-radius: 12px;
-  padding: 0.75rem;
-  color: white;
-  min-width: 120px;
-  max-width: 150px;
-  transition: all 0.3s;
-  border: 2px solid transparent;
+  background: linear-gradient(180deg, rgba(252, 243, 219, 0.92) 0%, rgba(245, 225, 178, 0.92) 100%);
+  border-radius: 14px;
+  padding: 0.55rem;
+  min-width: 122px;
+  max-width: 156px;
+  border: 2px solid rgba(68, 117, 176, 0.48);
+  box-shadow: 0 8px 18px rgba(21, 58, 108, 0.3);
 }
 
 .player-panel.active {
-  border-color: #4CAF50;
-  box-shadow: 0 0 15px rgba(76, 175, 80, 0.5);
+  border-color: rgba(84, 194, 119, 0.85);
 }
 
 .player-panel.dead {
-  opacity: 0.4;
-  filter: grayscale(100%);
+  opacity: 0.48;
+  filter: grayscale(0.85);
 }
 
 .player-panel.self {
-  border-color: #2196F3;
+  border-color: rgba(79, 159, 242, 0.88);
 }
 
 .player-avatar {
   position: relative;
   display: flex;
   justify-content: center;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.4rem;
 }
 
 .avatar-letter {
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(180deg, #8fd6ff 0%, #4d94dd 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: bold;
-  font-size: 1.2rem;
+  color: #fff;
+  font-family: var(--bb-font-display);
+  font-size: 1.05rem;
 }
 
 .turn-indicator {
   position: absolute;
-  top: -10px;
+  top: -9px;
   left: 50%;
   transform: translateX(-50%);
-  background: #4CAF50;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 0.6rem;
-  font-weight: bold;
+  background: rgba(255, 177, 73, 0.95);
+  color: #663009;
+  padding: 1px 7px;
+  border-radius: var(--bb-radius-pill);
+  font-size: 0.56rem;
+  font-weight: 800;
 }
 
 .player-info {
@@ -302,8 +295,9 @@ const shootTarget = async (targetId) => {
 }
 
 .name {
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 0.82rem;
+  color: var(--bb-blue-900);
+  font-weight: 700;
   display: block;
   margin-bottom: 0.25rem;
   white-space: nowrap;
@@ -314,60 +308,57 @@ const shootTarget = async (targetId) => {
 .health-bar {
   position: relative;
   height: 16px;
-  background: #333;
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
+  background: rgba(28, 70, 122, 0.18);
 }
 
 .health-fill {
   height: 100%;
-  background: linear-gradient(90deg, #f44336, #4CAF50);
+  background: linear-gradient(90deg, #de5f4d, #57c97a);
   transition: width 0.3s;
 }
 
 .health-text {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 0.65rem;
-  font-weight: bold;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
 .player-items {
-  margin-top: 0.5rem;
+  margin-top: 0.42rem;
   text-align: center;
 }
 
 .item-count {
-  font-size: 0.75rem;
-  color: #aaa;
+  font-size: 0.73rem;
+  color: var(--bb-text-secondary);
 }
 
 .my-items {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem;
+  gap: 0.2rem;
   justify-content: center;
 }
 
 .item-btn {
-  background: #333;
   border: 2px solid transparent;
-  border-radius: 6px;
-  padding: 0.25rem;
+  border-radius: 8px;
+  padding: 0.2rem;
   cursor: pointer;
-  font-size: 1rem;
-  transition: all 0.2s;
+  font-size: 0.92rem;
+  background: rgba(34, 102, 177, 0.08);
 }
 
 .item-btn.selected {
-  border-color: #4CAF50;
-  background: rgba(76, 175, 80, 0.3);
-}
-
-.item-btn:hover {
-  transform: scale(1.1);
+  border-color: rgba(74, 181, 109, 0.8);
+  background: rgba(74, 181, 109, 0.2);
 }
 
 .shotgun-status {
@@ -375,179 +366,117 @@ const shootTarget = async (targetId) => {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: rgba(0, 0, 0, 0.85);
-  color: white;
-  padding: 1rem 2rem;
-  border-radius: 12px;
+  padding: 0.75rem 1rem;
   text-align: center;
   pointer-events: none;
 }
 
 .rounds-info {
   display: flex;
-  gap: 1.5rem;
-  font-size: 1rem;
-  font-weight: bold;
+  gap: 1rem;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--bb-blue-900);
 }
 
-.rounds-info .live { color: #f44336; }
-.rounds-info .blank { color: #9e9e9e; }
-.rounds-info .total { color: #FFD700; }
-
-.sawed-off {
-  color: #ff5722;
-  margin-top: 0.5rem;
-  font-weight: bold;
-  animation: pulse 1s infinite;
-}
-
+.sawed-off,
 .revealed-round {
-  color: #4CAF50;
-  margin-top: 0.5rem;
-  font-weight: bold;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.6; }
+  margin-top: 0.35rem;
+  color: var(--bb-orange-900);
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
 .action-panel {
   position: fixed;
-  bottom: 2rem;
+  bottom: 1.6rem;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 1rem;
+  gap: 0.65rem;
 }
 
-.btn-shoot {
-  background: linear-gradient(135deg, #f44336 0%, #c62828 100%);
-  color: white;
-  padding: 1rem 3rem;
-  font-size: 1.5rem;
-  font-weight: bold;
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  animation: shootPulse 1.5s infinite;
+.action-panel .bb-btn {
+  min-width: 152px;
 }
 
-@keyframes shootPulse {
-  0%, 100% { transform: scale(1); box-shadow: 0 4px 20px rgba(244, 67, 54, 0.4); }
-  50% { transform: scale(1.03); box-shadow: 0 6px 30px rgba(244, 67, 54, 0.6); }
-}
-
-.btn-item {
-  background: #2196F3;
-  color: white;
-  padding: 1rem 2rem;
-  font-size: 1rem;
-  font-weight: bold;
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-item:hover {
-  background: #1976D2;
-  transform: scale(1.02);
-}
-
-.waiting-notice, .spectating-notice {
+.waiting-notice,
+.spectating-notice {
   position: fixed;
-  bottom: 2rem;
+  bottom: 1.6rem;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.8);
-  color: #aaa;
-  padding: 1rem 2rem;
-  border-radius: 12px;
-  font-size: 1rem;
+  padding: 0.55rem 0.9rem;
+  font-size: 0.92rem;
+  color: var(--bb-blue-900);
 }
 
 .spectating-notice {
-  color: #f44336;
+  color: #b1483a;
 }
 
-/* Modal */
 .modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
+  inset: 0;
+  background: rgba(18, 51, 94, 0.62);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 200;
+  padding: 1rem;
 }
 
 .target-selector {
-  background: #1a1a2e;
-  border-radius: 16px;
-  padding: 2rem;
-  min-width: 300px;
-  color: white;
+  width: min(92vw, 340px);
+  padding: 1rem;
+  border-radius: var(--bb-radius-lg);
 }
 
 .target-selector h3 {
+  margin: 0 0 0.8rem;
   text-align: center;
-  margin-bottom: 1.5rem;
+  color: var(--bb-blue-900);
+  font-family: var(--bb-font-display);
 }
 
 .targets-grid {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.55rem;
+  margin-bottom: 0.8rem;
 }
 
 .target-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: 2px solid transparent;
+  border: 2px solid rgba(67, 117, 176, 0.38);
   border-radius: 12px;
-  padding: 1rem;
-  color: white;
+  padding: 0.65rem;
+  background: rgba(35, 100, 173, 0.08);
+  color: var(--bb-blue-900);
   cursor: pointer;
-  font-size: 1rem;
+  font-weight: 700;
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  transition: all 0.2s;
-}
-
-.target-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: #4CAF50;
 }
 
 .target-btn.self {
-  background: rgba(33, 150, 243, 0.2);
-  border-color: #2196F3;
+  background: rgba(244, 134, 31, 0.14);
+  border-color: rgba(151, 83, 25, 0.38);
 }
 
 .target-health {
-  color: #f44336;
-  font-size: 0.9rem;
+  color: var(--bb-orange-900);
+  font-size: 0.82rem;
 }
 
-.btn-cancel {
-  width: 100%;
-  margin-top: 1rem;
-  padding: 0.75rem;
-  background: rgba(244, 67, 54, 0.2);
-  border: 1px solid #f44336;
-  color: #f44336;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 1rem;
-  transition: all 0.2s;
-}
+@media (max-width: 640px) {
+  .action-panel {
+    width: calc(100vw - 2rem);
+    justify-content: center;
+    flex-wrap: wrap;
+  }
 
-.btn-cancel:hover {
-  background: #f44336;
-  color: white;
+  .action-panel .bb-btn {
+    min-width: 130px;
+  }
 }
 </style>

@@ -1,154 +1,218 @@
-/* ==========================================================================
-   REUSABLE COMPONENTS
-   Glass cards, buttons, inputs
-   ========================================================================== */
-
-/* ==========================================================================
-   GLASS CARD
-   ========================================================================== */
-
-.glass-card {
-    position: relative;
-    width: 90%;
-    max-width: 420px;
-    padding: 40px 32px;
-    text-align: center;
-
-    /* The Look */
-    background: rgba(255, 255, 255, 0.85);
-    /* Slightly more opaque for contrast */
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 4px solid var(--c-glass-border);
-    border-radius: var(--r-card);
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3),
-        inset 0 0 0 2px rgba(255, 255, 255, 1);
-
-    /* Entrance Animation */
-    animation: popIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-    opacity: 0;
-    transform: scale(0.8) translateY(20px);
+.bb-btn {
+  position: relative;
+  border: none;
+  border-radius: var(--bb-radius-pill);
+  color: var(--bb-cream-100);
+  min-height: 52px;
+  padding: 0.8rem 1.35rem;
+  font-family: var(--bb-font-display);
+  font-size: 1.03rem;
+  font-weight: 700;
+  letter-spacing: 0.015em;
+  cursor: pointer;
+  transition: transform 120ms ease, filter 120ms ease, box-shadow 120ms ease;
+  box-shadow: var(--bb-shadow-btn);
+  text-shadow: 0 1px 0 rgba(101, 44, 9, 0.6);
 }
 
-/* ==========================================================================
-   CONTENT STYLING
-   ========================================================================== */
-
-.game-title {
-    font-size: 3.5rem;
-    font-weight: 800;
-    margin: 0 0 8px 0;
-    letter-spacing: -0.03em;
-
-    /* Colorful Gradient Text */
-    background: linear-gradient(135deg, #ff4757 0%, #ff6b81 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    /* Standard property for future support */
-
-    /* Drop shadow helper since text-shadow doesn't work with clip */
-    filter: drop-shadow(2px 2px 0px rgba(0, 0, 0, 0.1));
-
-    /* Bouncy Entrance */
-    animation: floatTitle 3s ease-in-out infinite;
+.bb-btn::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 8px;
+  right: 8px;
+  height: 45%;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0));
+  pointer-events: none;
 }
 
-.game-subtitle {
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: #2f3542;
-    /* Darker, clearer text */
-    margin-bottom: 32px;
-    line-height: 1.5;
+.bb-btn:hover:not(:disabled) {
+  transform: translateY(-1px) scale(1.012);
+  filter: saturate(1.04);
 }
 
-.input-group {
-    position: relative;
-    margin-bottom: 24px;
+.bb-btn:active:not(:disabled),
+.bb-btn.is-pressed {
+  transform: translateY(3px) scale(0.995);
+  filter: brightness(0.94);
+  box-shadow: 0 2px 0 rgba(129, 62, 15, 0.95), 0 5px 10px rgba(20, 51, 103, 0.2);
 }
 
-/* Nintendo-style Input */
-.name-input {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 16px 20px;
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: #2f3542;
-    text-align: center;
-    background: #fff;
-    border: 3px solid #dfe4ea;
-    border-radius: var(--r-input);
-    outline: none;
-    transition: all 0.2s ease;
-    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+.bb-btn:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
 }
 
-.name-input:placeholder {
-    color: #a4b0be;
-    font-weight: 500;
+.bb-btn--primary {
+  background: var(--bb-bg-primary-btn);
+  box-shadow: var(--bb-shadow-btn);
 }
 
-.name-input:focus {
-    background: #fff;
-    border-color: var(--c-sky);
-    color: var(--c-text-main);
-    box-shadow: 0 0 0 4px rgba(112, 161, 255, 0.3);
-    transform: translateY(-2px);
+.bb-btn--secondary {
+  background: var(--bb-bg-secondary-btn);
+  box-shadow: var(--bb-shadow-btn-blue);
+  text-shadow: 0 1px 0 rgba(18, 60, 113, 0.65);
 }
 
-/* Nintendo-style Button */
-.start-btn {
-    width: 100%;
-    padding: 18px;
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: white;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    background-color: var(--c-accent);
-    border: none;
-    border-radius: var(--r-btn);
-    cursor: pointer;
-    position: relative;
-    overflow: hidden;
-    transition: transform 0.1s cubic-bezier(0.34, 1.56, 0.64, 1),
-        background-color 0.2s,
-        box-shadow 0.2s;
-    box-shadow: 0 4px 0 #d63031,
-        0 8px 16px var(--c-shadow);
+.bb-btn--danger {
+  background: var(--bb-bg-danger-btn);
+  box-shadow: 0 6px 0 rgba(116, 38, 30, 0.95), 0 10px 18px rgba(20, 51, 103, 0.35);
+  text-shadow: 0 1px 0 rgba(102, 28, 23, 0.65);
 }
 
-/* Shiny effect on button */
-.start-btn::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 50%;
-    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.2), transparent);
-    border-radius: var(--r-btn) var(--r-btn) 0 0;
+.bb-btn--ghost {
+  background: linear-gradient(180deg, rgba(248, 238, 214, 0.92), rgba(230, 213, 174, 0.92));
+  color: var(--bb-blue-900);
+  text-shadow: none;
+  box-shadow: 0 5px 0 rgba(134, 111, 74, 0.86), 0 10px 18px rgba(20, 51, 103, 0.25);
 }
 
-.start-btn:hover:not(:disabled) {
-    background-color: var(--c-accent-hover);
-    transform: translateY(-2px);
-    box-shadow: 0 6px 0 #d63031,
-        0 12px 20px var(--c-glow);
+.bb-btn--sm {
+  min-height: 38px;
+  padding: 0.35rem 0.9rem;
+  font-size: 0.86rem;
 }
 
-.start-btn:active:not(:disabled) {
-    transform: translateY(2px) scale(0.98);
-    box-shadow: 0 2px 0 #d63031,
-        0 4px 8px var(--c-shadow);
+.bb-btn--lg {
+  min-height: 60px;
+  font-size: 1.14rem;
+  padding: 0.95rem 1.8rem;
 }
 
-.start-btn:disabled {
-    background-color: #ccc;
-    box-shadow: none;
-    cursor: not-allowed;
-    transform: none;
-    opacity: 0.7;
+.bb-panel {
+  position: relative;
+  border-radius: var(--bb-radius-lg);
+  background: var(--bb-bg-panel);
+  border: 3px solid rgba(87, 125, 169, 0.82);
+  box-shadow: var(--bb-shadow-panel), inset 0 2px 0 rgba(255, 255, 255, 0.7), inset 0 -4px 0 rgba(145, 103, 56, 0.22);
+  padding: 1.3rem;
+}
+
+.bb-panel--alt {
+  background: var(--bb-bg-panel-alt);
+}
+
+.bb-panel__ribbon {
+  position: absolute;
+  top: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 150px;
+  max-width: calc(100% - 2rem);
+  text-align: center;
+  background: linear-gradient(180deg, #ffc27c 0%, #ec8f3a 100%);
+  color: #fff7e9;
+  padding: 0.35rem 1rem;
+  border-radius: var(--bb-radius-pill);
+  border: 2px solid rgba(125, 64, 16, 0.42);
+  font-family: var(--bb-font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  box-shadow: 0 6px 0 rgba(131, 66, 19, 0.85);
+}
+
+.bb-input {
+  width: 100%;
+  min-height: 52px;
+  border-radius: var(--bb-radius-pill);
+  border: 2px solid rgba(69, 113, 173, 0.5);
+  background: linear-gradient(180deg, #fdf8e6 0%, #f2e2bf 100%);
+  color: var(--bb-blue-900);
+  padding: 0.68rem 1rem;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  outline: none;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.8), inset 0 -3px 6px rgba(157, 111, 51, 0.18);
+  transition: box-shadow 150ms ease, border-color 150ms ease, transform 150ms ease;
+}
+
+.bb-input::placeholder {
+  color: rgba(35, 77, 124, 0.62);
+  letter-spacing: 0;
+}
+
+.bb-input:focus {
+  border-color: rgba(55, 137, 212, 0.95);
+  box-shadow: 0 0 0 4px rgba(92, 173, 248, 0.24), inset 0 2px 0 rgba(255, 255, 255, 0.8);
+  transform: translateY(-1px);
+}
+
+.bb-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--bb-radius-pill);
+  padding: 0.2rem 0.65rem;
+  background: rgba(22, 83, 153, 0.14);
+  color: var(--bb-blue-900);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.015em;
+}
+
+.bb-modal {
+  border-radius: var(--bb-radius-lg);
+  background: var(--bb-bg-panel);
+  border: 3px solid rgba(87, 125, 169, 0.8);
+  box-shadow: 0 22px 40px rgba(20, 52, 101, 0.42), inset 0 2px 0 rgba(255, 255, 255, 0.72);
+}
+
+.bb-slider {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.bb-slider__btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid rgba(49, 99, 159, 0.52);
+  background: linear-gradient(180deg, #88d4ff 0%, #4b95dc 100%);
+  color: #fff;
+  font-size: 1.25rem;
+  line-height: 1;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 3px 0 rgba(24, 66, 117, 0.88);
+}
+
+.bb-slider__btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 rgba(24, 66, 117, 0.88);
+}
+
+.bb-slider__track {
+  appearance: none;
+  width: 100%;
+  height: 14px;
+  border-radius: var(--bb-radius-pill);
+  background: linear-gradient(180deg, #fceabf 0%, #f2db9e 100%);
+  border: 2px solid rgba(81, 115, 156, 0.42);
+  outline: none;
+}
+
+.bb-slider__track::-webkit-slider-thumb {
+  appearance: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #ffbe57 0%, #f4861f 100%);
+  border: 2px solid rgba(136, 65, 16, 0.68);
+  box-shadow: 0 2px 8px rgba(22, 62, 114, 0.4);
+}
+
+.bb-slider__track::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #ffbe57 0%, #f4861f 100%);
+  border: 2px solid rgba(136, 65, 16, 0.68);
+  box-shadow: 0 2px 8px rgba(22, 62, 114, 0.4);
 }

@@ -1,6 +1,6 @@
 <template>
-  <div 
-    class="turn-timer"
+  <div
+    class="turn-timer bb-panel"
     :class="{ urgent: hasLimit && timeRemaining <= 10, 'my-turn': isMyTurn }"
   >
     <div class="timer-ring">
@@ -21,11 +21,11 @@
       </svg>
       <span class="timer-text">{{ displayTime }}</span>
     </div>
-    <span v-if="hasLimit">
-      <span v-if="isMyTurn" class="turn-label">YOUR TURN</span>
-      <span v-else class="turn-label">OTHER PLAYER'S TURN</span>
+    <span v-if="hasLimit" class="turn-label">
+      <span v-if="isMyTurn">Your Turn</span>
+      <span v-else>Other Player Turn</span>
     </span>
-    <span v-else class="turn-label">NO TURN LIMIT</span>
+    <span v-else class="turn-label">No Turn Limit</span>
   </div>
 </template>
 
@@ -58,18 +58,20 @@ const progressOffset = computed(() => {
 <style scoped>
 .turn-timer {
   position: fixed;
-  top: 1rem;
-  right: 1rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  top: 0.9rem;
+  right: 0.9rem;
   z-index: 150;
+  width: 120px;
+  padding: 0.55rem;
+  display: grid;
+  justify-items: center;
+  gap: 0.35rem;
 }
 
 .timer-ring {
   position: relative;
-  width: 70px;
-  height: 70px;
+  width: 64px;
+  height: 64px;
 }
 
 .timer-ring svg {
@@ -80,13 +82,13 @@ const progressOffset = computed(() => {
 
 .timer-bg {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.1);
+  stroke: rgba(39, 93, 156, 0.2);
   stroke-width: 8;
 }
 
 .timer-progress {
   fill: none;
-  stroke: #4CAF50;
+  stroke: #4e9cf2;
   stroke-width: 8;
   stroke-linecap: round;
   stroke-dasharray: v-bind('circumference + "px"');
@@ -94,7 +96,7 @@ const progressOffset = computed(() => {
 }
 
 .turn-timer.urgent .timer-progress {
-  stroke: #f44336;
+  stroke: #f4861f;
 }
 
 .timer-text {
@@ -102,30 +104,34 @@ const progressOffset = computed(() => {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: white;
-}
-
-.turn-timer.urgent .timer-text {
-  color: #f44336;
-  animation: urgentPulse 0.5s infinite;
-}
-
-@keyframes urgentPulse {
-  0%, 100% { transform: translate(-50%, -50%) scale(1); }
-  50% { transform: translate(-50%, -50%) scale(1.1); }
+  font-size: 1.2rem;
+  font-family: var(--bb-font-display);
+  color: var(--bb-blue-900);
 }
 
 .turn-label {
-  margin-top: 0.5rem;
-  font-size: 0.75rem;
-  color: #888;
-  font-weight: bold;
+  text-align: center;
+  font-size: 0.66rem;
+  color: var(--bb-text-secondary);
+  font-weight: 700;
   text-transform: uppercase;
+  line-height: 1.2;
 }
 
 .turn-timer.my-turn .turn-label {
-  color: #4CAF50;
+  color: var(--bb-orange-900);
+}
+
+@media (max-width: 640px) {
+  .turn-timer {
+    width: 106px;
+    padding: 0.45rem;
+    right: 0.55rem;
+  }
+
+  .timer-ring {
+    width: 58px;
+    height: 58px;
+  }
 }
 </style>

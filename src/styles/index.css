@@ -1,20 +1,7 @@
-/* ==========================================================================
-   MAIN STYLESHEET
-   Imports all modular CSS files
-   ========================================================================== */
-
-/* Base styles and CSS variables */
+@import './theme.css';
 @import './base.css';
-
-/* Keyframe animations */
 @import './animations.css';
-
-/* Reusable components */
 @import './components.css';
-
-/* Screen-specific styles */
 @import './start-screen.css';
 @import './game-over-screen.css';
-
-/* Responsive adjustments */
 @import './responsive.css';

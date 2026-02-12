@@ -1,19 +1,35 @@
 <template>
   <div class="lobby-view">
-    <div class="lobby-header">
-      <h1>Room: {{ roomStore.roomId }}</h1>
+    <GamePanel class="lobby-header" ribbon-text="Lobby" tone="alt">
+      <template #header>
+        <div class="lobby-title-row">
+          <BrandLogo variant="header" size="190" />
+          <div class="lobby-room-pill">
+            <span>Room</span>
+            <strong>{{ roomStore.roomId }}</strong>
+          </div>
+        </div>
+      </template>
+
       <div class="invite-section">
         <div class="invite-code">
-          <span class="code-label">Invite Code:</span>
+          <span class="code-label">Invite Code</span>
           <span class="code-value">{{ roomStore.currentRoom?.inviteCode }}</span>
-          <button @click="copyCode" class="btn-copy">📋 Copy</button>
+          <GameButton variant="secondary" size="sm" :block="false" @click="copyCode">Copy</GameButton>
         </div>
+
         <div class="invite-link">
-          <input :value="roomStore.currentRoom?.inviteLink" readonly class="link-input" />
-          <button @click="copyLink" class="btn-copy">🔗 Copy Link</button>
+          <input :value="roomStore.currentRoom?.inviteLink" readonly class="bb-input link-input" />
+          <GameButton variant="secondary" size="sm" @click="copyLink">Copy Link</GameButton>
         </div>
       </div>
-    </div>
+
+      <template #footer>
+        <div class="lobby-toolbar">
+          <GameButton variant="ghost" size="sm" :block="false" @click="showSettings = true">Settings</GameButton>
+        </div>
+      </template>
+    </GamePanel>
 
     <div class="players-grid">
       <PlayerCard
@@ -25,63 +41,66 @@
         @kick="roomStore.kickPlayer(player.userId)"
       />
 
-      <!-- Empty slots -->
       <div
         v-for="n in emptySlots"
         :key="'empty-' + n"
-        class="player-slot empty"
+        class="player-slot empty bb-panel"
       >
-        <div class="empty-icon">👤</div>
+        <div class="empty-icon">+</div>
         <span>Waiting for player...</span>
       </div>
     </div>
 
-    <div class="lobby-actions">
-      <button
-        v-if="!isReady"
-        @click="setReady(true)"
-        class="btn-ready"
-      >
-        ✓ Ready
-      </button>
-      <button
-        v-else
-        @click="setReady(false)"
-        class="btn-not-ready"
-      >
-        ✗ Not Ready
-      </button>
+    <GamePanel class="lobby-actions-panel" ribbon-text="Ready Check">
+      <div class="lobby-actions">
+        <GameButton
+          v-if="!isReady"
+          variant="primary"
+          @click="setReady(true)"
+        >
+          Ready
+        </GameButton>
+        <GameButton
+          v-else
+          variant="ghost"
+          @click="setReady(false)"
+        >
+          Not Ready
+        </GameButton>
 
-      <button
-        v-if="roomStore.isHost"
-        @click="startGame"
-        :disabled="!roomStore.canStart"
-        class="btn-start"
-      >
-        🎮 Start Game
-      </button>
+        <GameButton
+          v-if="roomStore.isHost"
+          variant="secondary"
+          :disabled="!roomStore.canStart"
+          @click="startGame"
+        >
+          Start Match
+        </GameButton>
 
-      <button @click="leaveRoom" class="btn-leave">
-        🚪 Leave Room
-      </button>
-    </div>
+        <GameButton variant="danger" @click="leaveRoom">Leave Room</GameButton>
+      </div>
 
-    <div class="lobby-footer">
       <p v-if="!roomStore.canStart && roomStore.isHost" class="helper-text">
         {{ getStartHelperText }}
       </p>
-    </div>
+    </GamePanel>
+
+    <SettingsModal v-model="showSettings" />
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useAuthStore } from '@/stores/authStore';
 import { useRoomStore } from '@/stores/roomStore';
 import { useGameStore } from '@/stores/gameStore';
 import { MIN_PLAYERS, MAX_PLAYERS } from '@/utils/constants';
 import { createLogger } from '@/utils/logger';
+import BrandLogo from '@/components/ui/BrandLogo.vue';
+import GameButton from '@/components/ui/GameButton.vue';
+import GamePanel from '@/components/ui/GamePanel.vue';
 import PlayerCard from './PlayerCard.vue';
+import SettingsModal from '@/components/SettingsModal.vue';
 
 const emit = defineEmits(['game-started', 'leave']);
 
@@ -89,9 +108,10 @@ const authStore = useAuthStore();
 const roomStore = useRoomStore();
 const gameStore = useGameStore();
 const logger = createLogger('LobbyView');
+const showSettings = ref(false);
 
 const isReady = computed(() => {
-  const me = roomStore.roomPlayers.find(p => p.userId === authStore.userId);
+  const me = roomStore.roomPlayers.find((p) => p.userId === authStore.userId);
   return me?.isReady || false;
 });
 
@@ -104,9 +124,9 @@ const getStartHelperText = computed(() => {
   if (roomStore.roomPlayers.length < MIN_PLAYERS) {
     return `Need at least ${MIN_PLAYERS} players to start`;
   }
-  const notReady = roomStore.roomPlayers.filter(p => !p.isReady);
+  const notReady = roomStore.roomPlayers.filter((p) => !p.isReady);
   if (notReady.length > 0) {
-    return `Waiting for ${notReady.map(p => p.displayName).join(', ')} to ready up`;
+    return `Waiting for ${notReady.map((p) => p.displayName).join(', ')} to ready up`;
   }
   return '';
 });
@@ -130,193 +150,163 @@ const leaveRoom = async () => {
   emit('leave');
 };
 
-const copyCode = () => {
-  navigator.clipboard.writeText(roomStore.currentRoom?.inviteCode);
-  alert('Code copied!');
+const copyCode = async () => {
+  const code = roomStore.currentRoom?.inviteCode;
+  if (!code) return;
+  try {
+    await navigator.clipboard.writeText(code);
+    alert('Invite code copied!');
+  } catch (_err) {
+    alert(code);
+  }
 };
 
-const copyLink = () => {
-  navigator.clipboard.writeText(roomStore.currentRoom?.inviteLink);
-  alert('Link copied!');
+const copyLink = async () => {
+  const link = roomStore.currentRoom?.inviteLink;
+  if (!link) return;
+  try {
+    await navigator.clipboard.writeText(link);
+    alert('Invite link copied!');
+  } catch (_err) {
+    alert(link);
+  }
 };
 </script>
 
 <style scoped>
 .lobby-view {
-  padding: 2rem;
-  max-width: 900px;
+  min-height: var(--app-height, 100dvh);
+  padding: 1rem;
+  display: grid;
+  gap: 1rem;
+  max-width: 980px;
   margin: 0 auto;
-  min-height: 100vh;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  color: white;
-  height: 100%;
   overflow: auto;
 }
 
 .lobby-header {
-  text-align: center;
-  margin-bottom: 2rem;
+  animation: bb-pop 180ms ease;
 }
 
-.lobby-header h1 {
-  font-size: 2rem;
-  margin-bottom: 1rem;
-  color: #4CAF50;
+.lobby-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.lobby-room-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.38rem 0.8rem;
+  border-radius: var(--bb-radius-pill);
+  background: rgba(41, 120, 198, 0.12);
+  border: 2px solid rgba(67, 118, 178, 0.38);
+  color: var(--bb-blue-900);
+}
+
+.lobby-room-pill strong {
+  letter-spacing: 0.06em;
 }
 
 .invite-section {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 1.5rem;
-  margin-top: 1rem;
+  display: grid;
+  gap: 0.75rem;
 }
 
 .invite-code {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: 0.6rem;
+  flex-wrap: wrap;
 }
 
 .code-label {
-  color: #aaa;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--bb-text-secondary);
 }
 
 .code-value {
-  font-size: 1.5rem;
-  font-weight: bold;
-  font-family: monospace;
-  letter-spacing: 4px;
-  color: #FFD700;
+  font-family: var(--bb-font-display);
+  font-size: 1.3rem;
+  color: var(--bb-orange-900);
+  letter-spacing: 0.12em;
 }
 
 .invite-link {
-  display: flex;
-  gap: 0.5rem;
+  display: grid;
+  grid-template-columns: 1fr 138px;
+  gap: 0.6rem;
 }
 
 .link-input {
-  flex: 1;
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-  font-size: 0.9rem;
+  text-align: left;
+  padding-left: 1rem;
 }
 
-.btn-copy {
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 8px;
-  background: #2196F3;
-  color: white;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: all 0.2s;
-}
-
-.btn-copy:hover {
-  background: #1976D2;
-  transform: scale(1.02);
+.lobby-toolbar {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .players-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  margin-bottom: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 0.85rem;
 }
 
 .player-slot.empty {
-  border: 2px dashed rgba(255, 255, 255, 0.2);
-  border-radius: 12px;
-  padding: 2rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: #666;
-  min-height: 120px;
+  min-height: 132px;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 0.4rem;
+  color: var(--bb-text-secondary);
 }
 
 .empty-icon {
-  font-size: 2rem;
-  margin-bottom: 0.5rem;
-  opacity: 0.5;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 1.3rem;
+  background: rgba(44, 113, 188, 0.12);
+  border: 2px solid rgba(66, 116, 176, 0.35);
+}
+
+.lobby-actions-panel {
+  margin-bottom: 0.6rem;
 }
 
 .lobby-actions {
-  display: flex;
-  gap: 1rem;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-.lobby-actions button {
-  padding: 1rem 2rem;
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  font-size: 1.1rem;
-  font-weight: 600;
-  transition: all 0.2s;
-}
-
-.btn-ready {
-  background: #4CAF50;
-  color: white;
-}
-
-.btn-ready:hover {
-  background: #45a049;
-  transform: scale(1.02);
-}
-
-.btn-not-ready {
-  background: #ff9800;
-  color: white;
-}
-
-.btn-not-ready:hover {
-  background: #f57c00;
-}
-
-.btn-start {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-}
-
-.btn-start:disabled {
-  background: #444;
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.btn-start:not(:disabled):hover {
-  transform: scale(1.02);
-  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
-}
-
-.btn-leave {
-  background: rgba(244, 67, 54, 0.2);
-  color: #f44336;
-  border: 1px solid #f44336;
-}
-
-.btn-leave:hover {
-  background: #f44336;
-  color: white;
-}
-
-.lobby-footer {
-  text-align: center;
-  margin-top: 2rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
 }
 
 .helper-text {
-  color: #FFD700;
+  margin: 0.8rem 0 0;
+  text-align: center;
   font-size: 0.9rem;
+  color: var(--bb-orange-900);
+  font-weight: 700;
+}
+
+@media (max-width: 700px) {
+  .invite-link {
+    grid-template-columns: 1fr;
+  }
+
+  .lobby-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .lobby-toolbar {
+    justify-content: center;
+  }
 }
 </style>

@@ -1,33 +1,17 @@
-/* ==========================================================================
-   RESPONSIVE STYLES
-   Media queries for different screen sizes
-   ========================================================================== */
+@media (max-width: 900px) {
+  :root {
+    --bb-radius-lg: 24px;
+  }
+}
 
-@media (max-width: 400px) {
-    .glass-card {
-        width: 85%;
-        padding: 30px 20px;
-    }
+@media (max-width: 640px) {
+  .bb-btn {
+    min-height: 48px;
+    font-size: 0.98rem;
+  }
 
-    .game-title {
-        font-size: 2.5rem;
-    }
-
-    .game-over-card {
-        width: 85%;
-        padding: 32px 24px;
-    }
-
-    .result-title {
-        font-size: 2.2rem;
-    }
-
-    .icon-wrapper {
-        width: 100px;
-        height: 100px;
-    }
-
-    .icon-wrapper::before {
-        font-size: 40px;
-    }
+  .bb-panel {
+    padding: 1rem;
+    border-radius: 22px;
+  }
 }

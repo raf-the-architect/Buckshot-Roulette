@@ -1,0 +1,58 @@
+:root {
+  --bb-font-display: 'Fredoka', 'Baloo 2', 'Trebuchet MS', sans-serif;
+  --bb-font-body: 'Baloo 2', 'Fredoka', 'Trebuchet MS', sans-serif;
+
+  --bb-blue-900: #123e81;
+  --bb-blue-800: #1b4f9e;
+  --bb-blue-700: #2f69c3;
+  --bb-blue-500: #4ca9ff;
+  --bb-blue-300: #93d8ff;
+
+  --bb-orange-900: #9d3f0a;
+  --bb-orange-700: #d96414;
+  --bb-orange-600: #f4861f;
+  --bb-orange-500: #ffa63f;
+  --bb-orange-300: #ffd089;
+
+  --bb-cream-100: #fff6df;
+  --bb-cream-200: #f8e7bd;
+  --bb-cream-300: #edd6a6;
+  --bb-brown-500: #9f6a33;
+  --bb-brown-700: #70421f;
+
+  --bb-success: #57c97a;
+  --bb-danger: #de5f4d;
+  --bb-info: #59a6ff;
+
+  --bb-bg-main: linear-gradient(155deg, #1b4f9e 0%, #2f69c3 30%, #3d86da 58%, #f6ad44 100%);
+  --bb-bg-card: linear-gradient(180deg, #fff7df 0%, #f8e6be 100%);
+  --bb-bg-panel: linear-gradient(180deg, #fff7e3 0%, #f5e0b4 100%);
+  --bb-bg-panel-alt: linear-gradient(180deg, #eef7ff 0%, #cbe3ff 100%);
+  --bb-bg-primary-btn: linear-gradient(180deg, #ffb24d 0%, #f4861f 100%);
+  --bb-bg-secondary-btn: linear-gradient(180deg, #73c6ff 0%, #2f7fdb 100%);
+  --bb-bg-danger-btn: linear-gradient(180deg, #f38a76 0%, #d95444 100%);
+
+  --bb-shadow-panel: 0 18px 38px rgba(24, 53, 102, 0.32);
+  --bb-shadow-soft: 0 10px 20px rgba(18, 53, 107, 0.22);
+  --bb-shadow-btn: 0 6px 0 rgba(129, 62, 15, 0.95), 0 10px 18px rgba(20, 51, 103, 0.35);
+  --bb-shadow-btn-blue: 0 6px 0 rgba(18, 68, 132, 0.95), 0 10px 18px rgba(18, 53, 107, 0.35);
+  --bb-shadow-inset: inset 0 2px 0 rgba(255, 255, 255, 0.7), inset 0 -3px 0 rgba(153, 91, 33, 0.32);
+
+  --bb-radius-pill: 999px;
+  --bb-radius-lg: 28px;
+  --bb-radius-md: 20px;
+  --bb-radius-sm: 14px;
+
+  --bb-spacing-xs: 0.4rem;
+  --bb-spacing-sm: 0.7rem;
+  --bb-spacing-md: 1rem;
+  --bb-spacing-lg: 1.4rem;
+  --bb-spacing-xl: 2rem;
+
+  --bb-text-primary: #17355e;
+  --bb-text-secondary: #2f5f97;
+  --bb-text-on-dark: #f6f7f4;
+
+  --app-width: 100vw;
+  --app-height: 100dvh;
+}

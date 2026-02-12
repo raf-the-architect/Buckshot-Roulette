@@ -1,10 +1,10 @@
 <template>
-  <div 
-    class="player-card"
-    :class="{ 
-      'is-host': player.isHost, 
-      'is-me': isMe, 
-      'is-ready': player.isReady 
+  <div
+    class="player-card bb-panel"
+    :class="{
+      'is-host': player.isHost,
+      'is-me': isMe,
+      'is-ready': player.isReady
     }"
   >
     <div class="player-avatar">
@@ -25,13 +25,14 @@
       </span>
     </div>
 
-    <button 
-      v-if="isHost && !isMe" 
-      @click="$emit('kick')" 
+    <button
+      v-if="isHost && !isMe"
+      @click="$emit('kick')"
       class="btn-kick"
       title="Kick player"
+      type="button"
     >
-      ✕
+      ×
     </button>
   </div>
 </template>
@@ -63,28 +64,24 @@ const getInitial = computed(() => {
 
 <style scoped>
 .player-card {
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 1.5rem;
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.9rem;
   position: relative;
-  transition: all 0.2s;
-  border: 2px solid transparent;
+  border-width: 2px;
+  transition: transform 130ms ease;
 }
 
 .player-card:hover {
-  background: rgba(255, 255, 255, 0.12);
+  transform: translateY(-2px);
 }
 
 .player-card.is-me {
-  border-color: #2196F3;
-  background: rgba(33, 150, 243, 0.15);
+  border-color: rgba(54, 124, 203, 0.8);
 }
 
 .player-card.is-ready {
-  border-color: #4CAF50;
+  box-shadow: 0 12px 24px rgba(16, 74, 137, 0.22), inset 0 0 0 2px rgba(86, 201, 122, 0.44);
 }
 
 .player-avatar {
@@ -92,23 +89,24 @@ const getInitial = computed(() => {
 }
 
 .avatar-circle {
-  width: 50px;
-  height: 50px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(180deg, #8fd6ff 0%, #4d94dd 100%);
+  color: #f7fbff;
+  border: 2px solid rgba(35, 86, 142, 0.54);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: white;
+  font-family: var(--bb-font-display);
+  font-size: 1.36rem;
 }
 
 .host-badge {
   position: absolute;
-  top: -8px;
-  right: -8px;
-  font-size: 1.2rem;
+  top: -6px;
+  right: -7px;
+  font-size: 1rem;
 }
 
 .ready-badge {
@@ -117,69 +115,64 @@ const getInitial = computed(() => {
   right: -4px;
   width: 20px;
   height: 20px;
-  background: #4CAF50;
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  color: white;
-  font-weight: bold;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(180deg, #7fdc95 0%, #49b467 100%);
+  border: 1px solid rgba(28, 106, 53, 0.56);
+  font-size: 0.72rem;
+  font-weight: 800;
 }
 
 .player-info {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+  min-width: 0;
+  display: grid;
+  gap: 0.2rem;
 }
 
 .player-name {
-  font-weight: 600;
+  color: var(--bb-blue-900);
+  font-family: var(--bb-font-display);
   font-size: 1rem;
-  color: white;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .you-tag {
-  color: #2196F3;
-  font-size: 0.8rem;
-  font-weight: normal;
+  color: var(--bb-orange-900);
+  font-size: 0.78rem;
+  margin-left: 0.2rem;
 }
 
 .player-status {
-  font-size: 0.85rem;
-  color: #888;
+  color: var(--bb-text-secondary);
+  font-size: 0.84rem;
+  font-weight: 600;
 }
 
 .player-status.ready {
-  color: #4CAF50;
+  color: var(--bb-success);
 }
 
 .btn-kick {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 24px;
-  height: 24px;
   border: none;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: rgba(244, 67, 54, 0.2);
-  color: #f44336;
+  background: linear-gradient(180deg, #f79f8e 0%, #d96455 100%);
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
   cursor: pointer;
-  font-size: 0.75rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: all 0.2s;
+  box-shadow: 0 3px 0 rgba(116, 44, 37, 0.75);
+  line-height: 1;
 }
 
-.player-card:hover .btn-kick {
-  opacity: 1;
-}
-
-.btn-kick:hover {
-  background: #f44336;
-  color: white;
+.btn-kick:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 rgba(116, 44, 37, 0.75);
 }
 </style>

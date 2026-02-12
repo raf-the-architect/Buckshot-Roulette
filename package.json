@@ -1,12 +1,13 @@
 {
-  "name": "buckshot-roulette",
+  "name": "bang-or-blank",
   "version": "1.0.0",
-  "description": "Buckshot Roulette - A multiplayer game of chance and strategy",
+  "description": "Bang or Blank - A playful multiplayer game of chance and strategy",
   "type": "module",
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview",
+    "generate:brand-assets": "bash tasks/generate-brand-assets.sh",
     "deploy": "npm run build && firebase deploy"
   },
   "dependencies": {

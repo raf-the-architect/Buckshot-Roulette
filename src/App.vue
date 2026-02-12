@@ -1,9 +1,14 @@
 <template>
-  <div id="buckshot-app" :class="['app-container', { 'game-active': currentScreen === 'game' }]">
+  <div id="bang-or-blank-app" :class="['app-container', { 'game-active': currentScreen === 'game' }]">
     <!-- Loading Screen -->
     <div v-if="!isReady" class="loading-screen">
-      <div class="loading-spinner"></div>
-      <p>Loading...</p>
+      <div class="loading-card bb-panel">
+        <BrandLogo variant="hero" size="260" />
+        <div class="loading-meter">
+          <div class="loading-meter__bar"></div>
+        </div>
+        <p>Loading Bang or Blank...</p>
+      </div>
     </div>
 
     <!-- Start Screen -->
@@ -77,6 +82,7 @@ import { MAX_PLAYERS, MIN_PLAYERS, ROOM_STATUS } from '@/utils/constants';
 import StartScreen from '@/screens/StartScreen.vue';
 import ReplayScreen from '@/screens/ReplayScreen.vue';
 import LobbyView from '@/components/LobbyView.vue';
+import BrandLogo from '@/components/ui/BrandLogo.vue';
 import { registerServiceWorker } from '@/utils/pwa';
 
 // Stores
@@ -107,8 +113,10 @@ const viewportCleanup = [];
 let syncTicker = null;
 let disposePwa = null;
 const MAX_RENDER_DPR = 2;
-const PLAYER_NAME_STORAGE_KEY = 'buckshot_player_name';
-const ACTIVE_ROOM_STORAGE_KEY = 'buckshot_active_room';
+const PLAYER_NAME_STORAGE_KEY = 'bang_or_blank_player_name';
+const ACTIVE_ROOM_STORAGE_KEY = 'bang_or_blank_active_room';
+const LEGACY_PLAYER_NAME_STORAGE_KEY = 'buckshot_player_name';
+const LEGACY_ACTIVE_ROOM_STORAGE_KEY = 'buckshot_active_room';
 
 function getCappedDevicePixelRatio() {
   return Math.min(MAX_RENDER_DPR, Math.max(1, window.devicePixelRatio || 1));
@@ -183,6 +191,39 @@ function rememberActiveRoom(roomCode) {
 function clearActiveRoom() {
   localStorage.removeItem(ACTIVE_ROOM_STORAGE_KEY);
   pendingJoinCode.value = normalizeRoomCode(route.params.code);
+}
+
+function migrateLegacyLocalState() {
+  const migrated = {
+    playerName: '',
+    activeRoomCode: ''
+  };
+
+  const currentPlayer = normalizePlayerName(localStorage.getItem(PLAYER_NAME_STORAGE_KEY));
+  if (currentPlayer) {
+    migrated.playerName = currentPlayer;
+  } else {
+    const legacyPlayer = normalizePlayerName(localStorage.getItem(LEGACY_PLAYER_NAME_STORAGE_KEY));
+    if (legacyPlayer) {
+      localStorage.setItem(PLAYER_NAME_STORAGE_KEY, legacyPlayer);
+      localStorage.removeItem(LEGACY_PLAYER_NAME_STORAGE_KEY);
+      migrated.playerName = legacyPlayer;
+    }
+  }
+
+  const currentRoom = normalizeRoomCode(localStorage.getItem(ACTIVE_ROOM_STORAGE_KEY));
+  if (currentRoom) {
+    migrated.activeRoomCode = currentRoom;
+  } else {
+    const legacyRoom = normalizeRoomCode(localStorage.getItem(LEGACY_ACTIVE_ROOM_STORAGE_KEY));
+    if (legacyRoom) {
+      localStorage.setItem(ACTIVE_ROOM_STORAGE_KEY, legacyRoom);
+      localStorage.removeItem(LEGACY_ACTIVE_ROOM_STORAGE_KEY);
+      migrated.activeRoomCode = legacyRoom;
+    }
+  }
+
+  return migrated;
 }
 
 async function ensureJoinRoute(roomCode, replace = true) {
@@ -285,7 +326,7 @@ onMounted(async () => {
   registerViewportListeners();
   disposePwa = registerServiceWorker({
     onNeedRefresh: (applyUpdate) => {
-      const shouldReload = window.confirm('A new version of the game is available. Reload now?');
+      const shouldReload = window.confirm('A new version of Bang or Blank is available. Reload now?');
       if (shouldReload) {
         applyUpdate();
       }
@@ -318,14 +359,16 @@ onMounted(async () => {
     logger.info('single_player_available_without_auth');
   }
   
+  const migratedLocalState = migrateLegacyLocalState();
+
   // Load saved player name only (no auto-generated default prefill).
-  const savedName = normalizePlayerName(localStorage.getItem(PLAYER_NAME_STORAGE_KEY));
+  const savedName = migratedLocalState.playerName;
   if (savedName) {
     playerName.value = savedName;
   }
 
   const routeRoomCode = normalizeRoomCode(route.params.code);
-  const storedActiveRoomCode = normalizeRoomCode(localStorage.getItem(ACTIVE_ROOM_STORAGE_KEY));
+  const storedActiveRoomCode = migratedLocalState.activeRoomCode;
   pendingJoinCode.value = routeRoomCode || storedActiveRoomCode;
 
   // Listen for game-over event from Phaser
@@ -763,30 +806,67 @@ watch(() => roomStore.currentRoom?.status, (status) => {
   width: var(--app-width, 100vw);
   height: var(--app-height, 100dvh);
   min-height: var(--app-height, 100dvh);
-  overflow: hidden;
+  overflow: auto;
 }
 
 .loading-screen {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding: 1rem;
   height: var(--app-height, 100dvh);
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  color: white;
+  background: var(--bb-bg-main);
+}
+
+.loading-card {
+  width: min(92vw, 440px);
+  display: grid;
+  justify-items: center;
+  gap: 1rem;
+  text-align: center;
+  color: var(--bb-blue-900);
+}
+
+.loading-card p {
+  margin: 0;
+  font-family: var(--bb-font-display);
+  font-size: 1.02rem;
+}
+
+.loading-meter {
+  width: 100%;
+  border-radius: var(--bb-radius-pill);
+  border: 2px solid rgba(62, 109, 169, 0.45);
+  background: linear-gradient(180deg, #eef6ff 0%, #d3e8ff 100%);
+  overflow: hidden;
+  box-shadow: inset 0 2px 4px rgba(26, 62, 111, 0.2);
+}
+
+.loading-meter__bar {
+  width: 42%;
+  height: 14px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ffa63f 0%, #f4861f 100%);
+  box-shadow: 0 0 12px rgba(255, 150, 47, 0.55);
+  animation: loading-slide 1.05s ease-in-out infinite alternate;
 }
 
 .loading-spinner {
-  width: 50px;
-  height: 50px;
-  border: 4px solid rgba(255, 255, 255, 0.1);
-  border-left-color: #4CAF50;
+  width: 42px;
+  height: 42px;
+  border: 4px solid rgba(255, 246, 223, 0.35);
+  border-left-color: var(--bb-orange-700);
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+  animation: bb-spin 900ms linear infinite;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+@keyframes loading-slide {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(130%);
+  }
 }
 
 #phaser-container {
@@ -802,7 +882,7 @@ watch(() => roomStore.currentRoom?.status, (status) => {
 .hidden {
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.6s ease;
+  transition: opacity 0.5s ease;
 }
 
 .start-sync-overlay {
@@ -812,19 +892,20 @@ watch(() => roomStore.currentRoom?.status, (status) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(8, 10, 18, 0.72);
-  backdrop-filter: blur(4px);
+  background: rgba(19, 53, 96, 0.62);
+  backdrop-filter: blur(6px);
+  padding: 1rem;
 }
 
 .start-sync-card {
-  width: min(88vw, 360px);
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: linear-gradient(165deg, rgba(18, 23, 41, 0.95), rgba(11, 15, 29, 0.96));
-  padding: 1.2rem 1rem;
+  width: min(90vw, 380px);
+  border-radius: var(--bb-radius-lg);
+  border: 3px solid rgba(72, 112, 162, 0.74);
+  background: var(--bb-bg-panel);
+  padding: 1.25rem 1rem;
   text-align: center;
-  color: #fff;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+  color: var(--bb-blue-900);
+  box-shadow: var(--bb-shadow-panel);
 }
 
 .start-sync-spinner {
@@ -834,38 +915,40 @@ watch(() => roomStore.currentRoom?.status, (status) => {
 }
 
 .start-sync-countdown {
-  width: 62px;
-  height: 62px;
+  width: 64px;
+  height: 64px;
   margin: 0 auto 0.7rem;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.8rem;
-  font-weight: 800;
-  color: #4caf50;
-  border: 2px solid rgba(76, 175, 80, 0.65);
-  background: rgba(76, 175, 80, 0.1);
+  font-weight: 700;
+  color: var(--bb-cream-100);
+  background: linear-gradient(180deg, #ffb24d 0%, #e8751a 100%);
+  border: 2px solid rgba(123, 64, 18, 0.6);
+  box-shadow: 0 6px 0 rgba(132, 69, 20, 0.84);
 }
 
 .start-sync-title {
   margin: 0;
-  font-size: 1.2rem;
+  font-size: 1.22rem;
   font-weight: 700;
+  font-family: var(--bb-font-display);
 }
 
 .start-sync-subtitle {
-  margin: 0.55rem 0 0;
-  font-size: 0.95rem;
-  color: rgba(255, 255, 255, 0.84);
+  margin: 0.55rem 0 0.2rem;
+  font-size: 0.94rem;
+  color: var(--bb-text-secondary);
 }
 
 .start-sync-player-list {
-  margin: 0.75rem 0 0;
+  margin: 0.75rem 0 0.1rem;
   padding: 0;
   list-style: none;
   display: grid;
-  gap: 0.45rem;
+  gap: 0.4rem;
   text-align: left;
 }
 
@@ -873,18 +956,21 @@ watch(() => roomStore.currentRoom?.status, (status) => {
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  font-size: 0.92rem;
-  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.9rem;
+  color: var(--bb-blue-900);
+  background: rgba(34, 103, 183, 0.08);
+  border-radius: var(--bb-radius-sm);
+  padding: 0.36rem 0.6rem;
 }
 
 .start-sync-player-indicator {
   width: 1.1rem;
   text-align: center;
-  color: rgba(255, 255, 255, 0.42);
+  color: rgba(30, 82, 145, 0.45);
 }
 
 .start-sync-player-indicator.ready {
-  color: #4caf50;
+  color: var(--bb-success);
 }
 
 .start-sync-player-name {
@@ -892,5 +978,11 @@ watch(() => roomStore.currentRoom?.status, (status) => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+@media (max-width: 640px) {
+  .loading-card {
+    gap: 0.8rem;
+  }
 }
 </style>

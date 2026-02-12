@@ -40,7 +40,8 @@ const logger = createLogger('GameScene');
 const MULTIPLAYER_ACTION_ACK_TIMEOUT_MS = 8000;
 const MULTIPLAYER_ACTION_SYNC_LEAD_MS = 180;
 const MULTIPLAYER_ACTION_FALLBACK_DURATION_MS = 520;
-const REVEAL_SEEN_STORAGE_KEY = 'buckshot_seen_round_reveal';
+const REVEAL_SEEN_STORAGE_KEY = 'bang_or_blank_seen_round_reveal';
+const LEGACY_REVEAL_SEEN_STORAGE_KEY = 'buckshot_seen_round_reveal';
 
 export class GameScene extends Phaser.Scene {
   constructor() {
@@ -787,12 +788,18 @@ export class GameScene extends Phaser.Scene {
    */
   getSeenRoundRevealMarker() {
     try {
-      const raw = localStorage.getItem(REVEAL_SEEN_STORAGE_KEY);
+      const rawCurrent = localStorage.getItem(REVEAL_SEEN_STORAGE_KEY);
+      const rawLegacy = localStorage.getItem(LEGACY_REVEAL_SEEN_STORAGE_KEY);
+      const raw = rawCurrent || rawLegacy;
       if (!raw) return null;
       const parsed = JSON.parse(raw);
       const roundNumber = Number(parsed?.roundNumber);
       if (!parsed?.matchId || !Number.isFinite(roundNumber) || roundNumber <= 0) {
         return null;
+      }
+      if (!rawCurrent && rawLegacy) {
+        localStorage.setItem(REVEAL_SEEN_STORAGE_KEY, rawLegacy);
+        localStorage.removeItem(LEGACY_REVEAL_SEEN_STORAGE_KEY);
       }
       return {
         matchId: String(parsed.matchId),

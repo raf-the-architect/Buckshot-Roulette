@@ -1,95 +1,72 @@
-/* ==========================================================================
-   BASE STYLES
-   Variables, resets, and body styling
-   ========================================================================== */
-
-:root {
-    /* Palette - Playful & Bright */
-    --c-glass-bg: rgba(255, 255, 255, 0.65);
-    --c-glass-border: rgba(255, 255, 255, 0.8);
-    --c-accent: #ff4757;
-    /* Vibrant Red */
-    --c-accent-hover: #ff6b81;
-    --c-primary: #2ed573;
-    /* Joyful Green */
-    --c-text-main: #2f3542;
-    /* Soft Black */
-    --c-text-sub: #57606f;
-    /* Soft Gray */
-    --c-sky: #70a1ff;
-    --c-shadow: rgba(0, 0, 0, 0.15);
-    --c-glow: rgba(255, 71, 87, 0.4);
-
-    /* Spacing & Sizing */
-    --r-card: 24px;
-    --r-btn: 50px;
-    --r-input: 16px;
-    --app-width: 100vw;
-    --app-height: 100dvh;
+* {
+  box-sizing: border-box;
 }
 
 html,
 body,
 #app {
-    width: 100%;
-    height: var(--app-height);
-    min-height: var(--app-height);
-    overflow: hidden;
-    overscroll-behavior: none;
+  margin: 0;
+  width: 100%;
+  height: var(--app-height, 100dvh);
+  min-height: var(--app-height, 100dvh);
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 body {
-    margin: 0;
-    overflow: hidden;
-    font-family: 'Inter', sans-serif;
-    background-color: #000;
-    /* Game background is black, UI sits on top */
-    width: var(--app-width);
-    height: var(--app-height);
-    position: fixed;
-    inset: 0;
+  font-family: var(--bb-font-body);
+  color: var(--bb-text-primary);
+  background: var(--bb-bg-main);
+  width: var(--app-width, 100vw);
+  position: fixed;
+  inset: 0;
 }
 
-/* Blurred background for landscape mode */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  z-index: -1;
+  pointer-events: none;
+}
+
 body::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: var(--app-width);
-    height: var(--app-height);
-    background-image: url('/assets/images/background.png');
-    background-size: cover;
-    background-position: center;
-    filter: blur(20px) brightness(0.4);
-    transform: scale(1.1);
-    /* Prevent blur edge artifacts */
-    z-index: -1;
-    opacity: 0;
-    transition: opacity 0.3s ease;
+  width: 60vw;
+  height: 60vw;
+  top: -22vw;
+  left: -16vw;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 214, 115, 0.46) 0%, rgba(255, 214, 115, 0) 70%);
 }
 
-/* Show blurred background only in landscape */
-@media (orientation: landscape) {
-    body::before {
-        opacity: 1;
-    }
+body::after {
+  width: 58vw;
+  height: 58vw;
+  bottom: -24vw;
+  right: -12vw;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(80, 196, 255, 0.38) 0%, rgba(80, 196, 255, 0) 72%);
 }
 
-/* Ensure Phaser fills the entire screen */
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
 #phaser-container {
-    width: var(--app-width);
-    height: var(--app-height);
-    position: fixed;
-    top: 0;
-    left: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    box-sizing: border-box;
+  width: var(--app-width, 100vw);
+  height: var(--app-height, 100dvh);
+  position: fixed;
+  top: 0;
+  left: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 #phaser-container canvas {
-    display: block;
-    image-rendering: auto;
+  display: block;
+  image-rendering: auto;
 }

@@ -1,5 +1,5 @@
-const APP_SHELL_CACHE = 'buckshot-app-shell-v1';
-const RUNTIME_CACHE = 'buckshot-runtime-v1';
+const APP_SHELL_CACHE = 'bang-or-blank-app-shell-v2';
+const RUNTIME_CACHE = 'bang-or-blank-runtime-v2';
 const PRECACHE_URLS = ['/', '/index.html', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {

@@ -1,74 +1,94 @@
 <template>
   <div id="start-screen">
-    <div class="glass-card">
-      <h1 class="game-title">Buckshot<br>Roulette</h1>
-      <p class="game-subtitle">
-        Take turns.<br>
-        Choose wisely.<br>
-        Survive the round!
-      </p>
+    <div class="start-screen__bg-glow start-screen__bg-glow--left"></div>
+    <div class="start-screen__bg-glow start-screen__bg-glow--right"></div>
+
+    <GamePanel class="start-panel" ribbon-text="Bang or Blank" tone="alt">
+      <template #header>
+        <div class="start-header">
+          <BrandLogo variant="hero" size="clamp(220px, 62vw, 340px)" />
+          <p class="game-subtitle">
+            Quick rounds. Smart choices.
+            <br />
+            Bang, bluff, and survive.
+          </p>
+        </div>
+      </template>
 
       <div class="input-group">
-        <input 
-          type="text" 
-          class="name-input" 
-          placeholder="Enter Player Name" 
+        <input
+          type="text"
+          class="bb-input"
+          placeholder="Enter Player Name"
           maxlength="12"
-          autocomplete="off" 
-          v-model="playerNameProxy" 
-          @keydown.enter="handleSinglePlayer" 
+          autocomplete="off"
+          v-model="playerNameProxy"
+          @keydown.enter="handleSinglePlayer"
           :disabled="isLoading"
-          ref="nameInput" 
+          ref="nameInput"
         />
       </div>
 
-      <!-- Game Mode Buttons -->
       <div class="mode-buttons">
-        <button 
-          class="start-btn single-player" 
-          :disabled="!canStart || isLoading" 
+        <GameButton
+          variant="primary"
+          size="lg"
+          :disabled="!canStart || isLoading"
+          :loading="isLoading"
           @click="handleSinglePlayer"
         >
-          {{ isLoading ? 'Loading...' : '🎮 Single Player' }}
-        </button>
+          {{ isLoading ? 'Loading...' : 'Single Player' }}
+        </GameButton>
 
-        <div class="multiplayer-section">
-          <button 
-            class="start-btn create-room" 
-            :disabled="!canMultiplayer || isLoading" 
-            @click="handleCreateRoom"
+        <GameButton
+          variant="secondary"
+          size="lg"
+          :disabled="!canMultiplayer || isLoading"
+          @click="handleCreateRoom"
+        >
+          Create Room
+        </GameButton>
+
+        <div class="join-section">
+          <input
+            type="text"
+            class="bb-input room-code-input"
+            placeholder="Room Code"
+            v-model="roomCode"
+            maxlength="6"
+            @keydown.enter="handleJoinRoom"
+            :disabled="isLoading"
+          />
+          <GameButton
+            variant="secondary"
+            size="md"
+            class="join-button"
+            :disabled="!canMultiplayer || !roomCode.trim() || isLoading"
+            @click="handleJoinRoom"
           >
-            🌐 Create Room
-          </button>
-          
-          <div class="join-section">
-            <input 
-              type="text" 
-              class="room-code-input" 
-              placeholder="Room Code"
-              v-model="roomCode"
-              maxlength="6"
-              @keydown.enter="handleJoinRoom"
-              :disabled="isLoading"
-            />
-            <button 
-              class="join-btn" 
-              :disabled="!canMultiplayer || !roomCode.trim() || isLoading" 
-              @click="handleJoinRoom"
-            >
-              Join
-            </button>
-          </div>
+            Join
+          </GameButton>
         </div>
       </div>
 
-      <p class="version-tag">v2.0 - Multiplayer Edition</p>
-    </div>
+      <template #footer>
+        <div class="start-footer">
+          <GameButton variant="ghost" size="sm" :block="false" @click="showSettings = true">Settings</GameButton>
+          <p class="version-tag">v2.0 Multiplayer Edition</p>
+        </div>
+      </template>
+    </GamePanel>
+
+    <SettingsModal v-model="showSettings" />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, watch } from 'vue';
+import BrandLogo from '@/components/ui/BrandLogo.vue';
+import GameButton from '@/components/ui/GameButton.vue';
+import GamePanel from '@/components/ui/GamePanel.vue';
+import SettingsModal from '@/components/SettingsModal.vue';
 
 const props = defineProps({
   modelValue: {
@@ -86,6 +106,7 @@ const emit = defineEmits(['update:modelValue', 'start-game', 'create-room', 'joi
 const isLoading = ref(false);
 const nameInput = ref(null);
 const roomCode = ref('');
+const showSettings = ref(false);
 
 const playerNameProxy = computed({
   get: () => props.modelValue,
@@ -139,174 +160,104 @@ defineExpose({ focusInput });
 
 <style scoped>
 #start-screen {
-  min-height: 100vh;
+  min-height: var(--app-height, 100dvh);
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
   padding: 1rem;
+  position: relative;
+  overflow: hidden;
 }
 
-.glass-card {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(20px);
-  border-radius: 24px;
-  padding: 3rem 2rem;
-  text-align: center;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  max-width: 400px;
-  width: 100%;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+.start-screen__bg-glow {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
 }
 
-.game-title {
-  font-size: 2.5rem;
-  font-weight: 800;
-  color: white;
-  margin-bottom: 1rem;
-  line-height: 1.1;
-  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+.start-screen__bg-glow--left {
+  width: 52vw;
+  height: 52vw;
+  min-width: 260px;
+  min-height: 260px;
+  left: -18vw;
+  top: -14vw;
+  background: radial-gradient(circle, rgba(255, 196, 109, 0.42) 0%, rgba(255, 196, 109, 0) 72%);
+}
+
+.start-screen__bg-glow--right {
+  width: 56vw;
+  height: 56vw;
+  min-width: 280px;
+  min-height: 280px;
+  right: -20vw;
+  bottom: -22vw;
+  background: radial-gradient(circle, rgba(130, 212, 255, 0.38) 0%, rgba(130, 212, 255, 0) 72%);
+}
+
+.start-panel {
+  position: relative;
+  z-index: 1;
+  width: min(92vw, 470px);
+  animation: bb-pop 220ms ease;
+}
+
+.start-header {
+  display: grid;
+  justify-items: center;
+  gap: 0.7rem;
 }
 
 .game-subtitle {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 1rem;
-  line-height: 1.6;
-  margin-bottom: 2rem;
+  margin: 0;
+  font-family: var(--bb-font-display);
+  text-align: center;
+  color: var(--bb-text-secondary);
+  line-height: 1.34;
+  font-size: 0.98rem;
 }
 
 .input-group {
-  margin-bottom: 1.5rem;
-}
-
-.name-input {
-  width: 100%;
-  padding: 1rem 1.5rem;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-  font-size: 1.1rem;
-  text-align: center;
-  outline: none;
-  transition: all 0.3s;
-}
-
-.name-input::placeholder {
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.name-input:focus {
-  border-color: #4CAF50;
-  box-shadow: 0 0 20px rgba(76, 175, 80, 0.3);
+  margin-bottom: 0.95rem;
 }
 
 .mode-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.start-btn {
-  width: 100%;
-  padding: 1rem 2rem;
-  border: none;
-  border-radius: 12px;
-  font-size: 1.1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.start-btn.single-player {
-  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
-  color: white;
-}
-
-.start-btn.single-player:hover:not(:disabled) {
-  transform: scale(1.02);
-  box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
-}
-
-.start-btn.create-room {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-}
-
-.start-btn.create-room:hover:not(:disabled) {
-  transform: scale(1.02);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-}
-
-.start-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.multiplayer-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding-top: 0.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  margin-top: 0.5rem;
+  display: grid;
+  gap: 0.72rem;
 }
 
 .join-section {
-  display: flex;
-  gap: 0.5rem;
+  display: grid;
+  grid-template-columns: 1fr 132px;
+  gap: 0.6rem;
 }
 
 .room-code-input {
-  flex: 1;
-  padding: 0.75rem 1rem;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-  font-size: 1rem;
-  text-align: center;
   text-transform: uppercase;
-  letter-spacing: 2px;
-  outline: none;
-  transition: all 0.3s;
+  letter-spacing: 0.12em;
 }
 
-.room-code-input::placeholder {
-  color: rgba(255, 255, 255, 0.5);
-  text-transform: none;
-  letter-spacing: normal;
+.join-button {
+  align-self: stretch;
 }
 
-.room-code-input:focus {
-  border-color: #2196F3;
-}
-
-.join-btn {
-  padding: 0.75rem 1.5rem;
-  background: #2196F3;
-  color: white;
-  border: none;
-  border-radius: 12px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.join-btn:hover:not(:disabled) {
-  background: #1976D2;
-}
-
-.join-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.start-footer {
+  display: grid;
+  gap: 0.45rem;
+  justify-items: center;
 }
 
 .version-tag {
-  margin-top: 2rem;
-  color: rgba(255, 255, 255, 0.3);
-  font-size: 0.75rem;
+  margin: 0;
+  color: rgba(32, 72, 117, 0.62);
+  font-size: 0.77rem;
+  font-weight: 600;
+}
+
+@media (max-width: 520px) {
+  .join-section {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

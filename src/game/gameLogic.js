@@ -1,5 +1,5 @@
 /**
- * Game Logic for Buckshot Roulette
+ * Game Logic for Bang or Blank
  * Supports 2-8 player multiplayer with network play
  */
 

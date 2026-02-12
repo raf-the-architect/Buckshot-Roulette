@@ -130,24 +130,24 @@ export const COLORS = {
 
 export const FONTS = {
     HEADLINE: {
-        fontFamily: "Inter, Arial, sans-serif",
+        fontFamily: "Fredoka, Baloo 2, Trebuchet MS, sans-serif",
         fontSize: "20px",
         fontStyle: "bold",
         color: COLORS.TEXT_PRIMARY
     },
     LABEL: {
-        fontFamily: "Inter, Arial, sans-serif",
+        fontFamily: "Fredoka, Baloo 2, Trebuchet MS, sans-serif",
         fontSize: "14px",
         fontStyle: "600",
         color: COLORS.TEXT_PRIMARY
     },
     BODY: {
-        fontFamily: "Inter, Arial, sans-serif",
+        fontFamily: "Baloo 2, Fredoka, Trebuchet MS, sans-serif",
         fontSize: "12px",
         color: COLORS.TEXT_SECONDARY
     },
     SMALL: {
-        fontFamily: "Inter, Arial, sans-serif",
+        fontFamily: "Baloo 2, Fredoka, Trebuchet MS, sans-serif",
         fontSize: "10px",
         color: COLORS.TEXT_MUTED
     }
