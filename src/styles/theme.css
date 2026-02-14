@@ -28,20 +28,20 @@
   --bb-bg-card: linear-gradient(180deg, #fff7df 0%, #f8e6be 100%);
   --bb-bg-panel: linear-gradient(180deg, #fff7e3 0%, #f5e0b4 100%);
   --bb-bg-panel-alt: linear-gradient(180deg, #eef7ff 0%, #cbe3ff 100%);
-  --bb-bg-primary-btn: linear-gradient(180deg, #ffb24d 0%, #f4861f 100%);
-  --bb-bg-secondary-btn: linear-gradient(180deg, #73c6ff 0%, #2f7fdb 100%);
-  --bb-bg-danger-btn: linear-gradient(180deg, #f38a76 0%, #d95444 100%);
+  --bb-bg-primary-btn: linear-gradient(180deg, #55d2ff 0%, #1ba9e2 100%);
+  --bb-bg-secondary-btn: linear-gradient(180deg, #6fc2ff 0%, #388fd7 100%);
+  --bb-bg-danger-btn: linear-gradient(180deg, #eb8a78 0%, #d45a4d 100%);
 
-  --bb-shadow-panel: 0 18px 38px rgba(24, 53, 102, 0.32);
-  --bb-shadow-soft: 0 10px 20px rgba(18, 53, 107, 0.22);
-  --bb-shadow-btn: 0 6px 0 rgba(129, 62, 15, 0.95), 0 10px 18px rgba(20, 51, 103, 0.35);
-  --bb-shadow-btn-blue: 0 6px 0 rgba(18, 68, 132, 0.95), 0 10px 18px rgba(18, 53, 107, 0.35);
+  --bb-shadow-panel: 0 6px 14px rgba(24, 53, 102, 0.18);
+  --bb-shadow-soft: 0 4px 10px rgba(18, 53, 107, 0.16);
+  --bb-shadow-btn: 0 2px 6px rgba(18, 53, 107, 0.24);
+  --bb-shadow-btn-blue: 0 2px 6px rgba(18, 53, 107, 0.24);
   --bb-shadow-inset: inset 0 2px 0 rgba(255, 255, 255, 0.7), inset 0 -3px 0 rgba(153, 91, 33, 0.32);
 
-  --bb-radius-pill: 999px;
-  --bb-radius-lg: 28px;
-  --bb-radius-md: 20px;
-  --bb-radius-sm: 14px;
+  --bb-radius-pill: 8px;
+  --bb-radius-lg: 8px;
+  --bb-radius-md: 8px;
+  --bb-radius-sm: 6px;
 
   --bb-spacing-xs: 0.4rem;
   --bb-spacing-sm: 0.7rem;

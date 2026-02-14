@@ -3,12 +3,15 @@
  * Manages HUD elements: Round indicator, Turn indicator, and glow effects
  */
 
-import { COLORS, FONTS } from "../LayoutConfig.js";
+import { FONTS } from "../LayoutConfig.js";
 
 export class HUDManager {
     constructor(scene) {
         this.scene = scene;
         this.hudRound = null;
+        this.roundBg = null;
+        this.roundPanel = null;
+        this.roundPanelWidth = 116;
         this.hudTurn = null;
         this.turnBg = null;
         this.turnPanel = null;
@@ -32,32 +35,34 @@ export class HUDManager {
         const layout = this.getLayout();
 
         // Round indicator panel (top-left)
-        const roundPanel = this.scene.add.container(60, 25);
-
+        const roundPanel = this.scene.add.container(14 + (this.roundPanelWidth / 2), 27);
         const roundBgGraphics = this.scene.add.graphics();
-        roundBgGraphics.fillStyle(COLORS.PANEL_BG, 0.95);
-        roundBgGraphics.lineStyle(1, COLORS.PANEL_BORDER);
-        roundBgGraphics.fillRoundedRect(-45, -16, 90, 32, 8);
-        roundBgGraphics.strokeRoundedRect(-45, -16, 90, 32, 8);
+        this.roundBg = roundBgGraphics;
+        this.roundPanel = roundPanel;
 
         this.hudRound = this.scene.add.text(0, -1, "Round 1", {
             ...FONTS.LABEL,
-            fontSize: "13px"
+            fontSize: "20px",
+            fontStyle: "bold",
+            color: "#fff8f8ff"
         }).setOrigin(0.5);
+        this.hudRound.setStroke("#081d35", 3);
+        this.hudRound.setShadow(0, 1, "#000000", 2, true, true);
         roundPanel.add([roundBgGraphics, this.hudRound]);
+        this.redrawRoundDecor();
 
         // Turn indicator panel (top-right)
-        const turnPanel = this.scene.add.container(layout.WIDTH - 70, 25);
+        const turnPanel = this.scene.add.container(layout.WIDTH - 70, 27);
 
         const turnBgGraphics = this.scene.add.graphics();
 
         this.hudTurn = this.scene.add.text(0, -1, "Your Turn", {
             ...FONTS.LABEL,
-            fontSize: "12px",
-            fontStyle: "700",
-            stroke: "#000000",
-            strokeThickness: 1
+            fontSize: "20px",
+            fontStyle: "bold",
+            color: "#f8fbff"
         }).setOrigin(0.5);
+        this.hudTurn.setStroke("#081d35", 3);
         this.hudTurn.setShadow(0, 1, "#000000", 2, true, true);
         this.turnBg = turnBgGraphics;
         this.turnPanel = turnPanel;
@@ -66,7 +71,63 @@ export class HUDManager {
         // Turn glow indicator
         this.turnGlow = this.scene.add.graphics();
         this.turnGlow.setAlpha(0);
-        this.applyTurnPanelStyle(COLORS.SUCCESS, 0x43a047, this.turnLabelRaw);
+        this.applyTurnPanelStyle("#f8fbff", 0x3d9edc, this.turnLabelRaw);
+    }
+
+    /**
+     * Draw a clean, high-contrast top-bar tag for readable HUD labels.
+     * @param {Phaser.GameObjects.Graphics} graphics - Graphics object.
+     * @param {number} x - Left coordinate.
+     * @param {number} y - Top coordinate.
+     * @param {number} width - Tag width.
+     * @param {number} height - Tag height.
+     * @param {number} radius - Tag corner radius.
+     * @param {number} accentHex - Accent color for inner border.
+     */
+    drawTagBackground(graphics, x, y, width, height, radius, accentHex = 0x3d9edc) {
+        graphics.clear();
+        graphics.fillStyle(0x132f4f, 0.92);
+        graphics.fillRoundedRect(x, y, width, height, radius);
+        graphics.lineStyle(1, accentHex, 0.78);
+        graphics.strokeRoundedRect(x, y, width, height, radius);
+        graphics.lineStyle(1, 0xffffff, 0.12);
+        graphics.strokeRoundedRect(x + 1, y + 1, width - 2, height - 2, Math.max(2, radius - 1));
+    }
+
+    /**
+     * Draw round panel background to current dimensions.
+     */
+    redrawRoundDecor() {
+        if (!this.roundBg || !this.roundPanel) return;
+        const layout = this.getLayout();
+        if (this.hudRound) {
+            this.hudRound.setStyle({
+                ...FONTS.LABEL,
+                fontSize: "20px",
+                fontStyle: "bold"
+            });
+            this.hudRound.setStroke("#081d35", 3);
+        }
+        this.roundPanelWidth = Phaser.Math.Clamp(
+            Math.ceil((this.hudRound?.width || this.roundPanelWidth) + 32),
+            116,
+            Math.floor(layout.WIDTH * 0.45)
+        );
+        const panelHeight = 36;
+        const panelRadius = 8;
+        const halfW = this.roundPanelWidth / 2;
+        const halfH = panelHeight / 2;
+
+        this.roundPanel.setPosition(14 + halfW, 27);
+        this.drawTagBackground(
+            this.roundBg,
+            -halfW,
+            -halfH,
+            this.roundPanelWidth,
+            panelHeight,
+            panelRadius,
+            0x3e86cc
+        );
     }
 
     /**
@@ -107,20 +168,13 @@ export class HUDManager {
      */
     redrawTurnDecor(borderHex) {
         const layout = this.getLayout();
-        const panelHeight = 34;
-        const panelRadius = 10;
+        const panelHeight = 36;
+        const panelRadius = 8;
         const halfW = this.turnPanelWidth / 2;
         const halfH = panelHeight / 2;
 
-        this.turnPanel.setPosition(layout.WIDTH - 10 - halfW, 25);
-
-        this.turnBg.clear();
-        this.turnBg.fillStyle(0x101823, 0.88);
-        this.turnBg.lineStyle(2, borderHex, 0.9);
-        this.turnBg.fillRoundedRect(-halfW, -halfH, this.turnPanelWidth, panelHeight, panelRadius);
-        this.turnBg.strokeRoundedRect(-halfW, -halfH, this.turnPanelWidth, panelHeight, panelRadius);
-        this.turnBg.lineStyle(1, 0xffffff, 0.08);
-        this.turnBg.strokeRoundedRect(-halfW + 1, -halfH + 1, this.turnPanelWidth - 2, panelHeight - 2, panelRadius - 1);
+        this.turnPanel.setPosition(layout.WIDTH - 14 - halfW, 27);
+        this.drawTagBackground(this.turnBg, -halfW, -halfH, this.turnPanelWidth, panelHeight, panelRadius, borderHex);
     }
 
     /**
@@ -133,6 +187,12 @@ export class HUDManager {
         const horizontalPadding = 18;
         const minWidth = 120;
         const maxWidth = Math.max(minWidth, Math.floor(layout.WIDTH * 0.74));
+        this.hudTurn.setStyle({
+            ...FONTS.LABEL,
+            fontSize: "20px",
+            fontStyle: "bold"
+        });
+        this.hudTurn.setStroke("#081d35", 3);
 
         const fittedLabel = this.fitTurnText(rawLabel, maxWidth - (horizontalPadding * 2));
         this.hudTurn.setText(fittedLabel);
@@ -152,6 +212,7 @@ export class HUDManager {
     update(state) {
         // Update round text with animation
         if (this.hudRound) {
+            this.redrawRoundDecor();
             const newRoundText = `Round ${state.roundNumber}`;
             if (this.hudRound.text !== newRoundText) {
                 this.scene.tweens.add({
@@ -169,7 +230,7 @@ export class HUDManager {
             const currentActor = state.players[state.currentTurnIndex];
             if (!currentActor) {
                 this.turnLabelRaw = "Waiting...";
-                this.applyTurnPanelStyle(COLORS.TEXT_PRIMARY, COLORS.PANEL_BORDER);
+                this.applyTurnPanelStyle("#f8fbff", 0x4f95d6);
                 return;
             }
             const isMyTurn = this.scene.isMultiplayer
@@ -183,8 +244,8 @@ export class HUDManager {
                 const actorName = currentActor.displayName || currentActor.name || currentActor.id || "Opponent";
                 turnName = `${actorName} Turn`;
             }
-            const turnColor = isMyTurn ? COLORS.SUCCESS : COLORS.DANGER;
-            const turnColorHex = isMyTurn ? 0x43a047 : 0xc62828;
+            const turnColor = "#f8fbff";
+            const turnColorHex = isMyTurn ? 0x61c884 : 0xe59a42;
             const textChanged = this.turnLabelRaw !== turnName;
 
             if (!textChanged) {
@@ -210,10 +271,11 @@ export class HUDManager {
                         // Single Pulse on turn start (If it's YOUR turn)
                         if (isMyTurn) {
                             this.turnGlow.clear();
-                            this.turnGlow.lineStyle(2, 0x43a047);
-                            const glowWidth = this.turnPanelWidth + 6;
+                            this.turnGlow.lineStyle(1, 0xffffff, 0.45);
+                            const glowWidth = this.turnPanelWidth + 4;
                             const glowX = this.turnPanel.x - (glowWidth / 2);
-                            this.turnGlow.strokeRoundedRect(glowX, 25 - 18, glowWidth, 36, 11);
+                            const glowY = this.turnPanel.y - 16;
+                            this.turnGlow.strokeRoundedRect(glowX, glowY, glowWidth, 32, 8);
 
                             this.turnGlow.setAlpha(0.8);
                             this.scene.tweens.add({

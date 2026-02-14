@@ -6,8 +6,28 @@ import { createLogger } from '@/utils/logger';
 
 const logger = createLogger('PWA');
 
+async function disablePwaForDevMode() {
+  try {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(registrations.map((registration) => registration.unregister()));
+
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((key) => caches.delete(key)));
+    }
+  } catch (err) {
+    logger.warn('sw_disable_in_dev_failed', { error: err?.message || String(err) });
+  }
+}
+
 export function registerServiceWorker(options = {}) {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+    return () => {};
+  }
+
+  if (import.meta.env.DEV) {
+    // In dev we explicitly remove existing SW + caches to avoid stale bundles.
+    void disablePwaForDevMode();
     return () => {};
   }
 

@@ -4,10 +4,6 @@
       <template #header>
         <div class="lobby-title-row">
           <BrandLogo variant="header" size="190" />
-          <div class="lobby-room-pill">
-            <span>Room</span>
-            <strong>{{ roomStore.roomId }}</strong>
-          </div>
         </div>
       </template>
 
@@ -46,23 +42,19 @@
       <div class="lobby-actions">
         <GameButton
           v-if="!isReady"
-          variant="primary"
+          variant="secondary"
           @click="setReady(true)"
         >
           Ready
         </GameButton>
         <GameButton
           v-else
-          variant="ghost"
+          variant="secondary"
           @click="setReady(false)"
         >
-          Not Ready
+          Cancel Ready
         </GameButton>
       </div>
-
-      <p v-if="!roomStore.canStart && roomStore.isHost" class="helper-text">
-        {{ getStartHelperText }}
-      </p>
     </GamePanel>
 
     <div class="lobby-bottom-actions bb-panel" :class="{ host: roomStore.isHost }">
@@ -86,7 +78,6 @@ import { computed, ref } from 'vue';
 import { useAuthStore } from '@/stores/authStore';
 import { useRoomStore } from '@/stores/roomStore';
 import { useGameStore } from '@/stores/gameStore';
-import { MIN_PLAYERS } from '@/utils/constants';
 import { createLogger } from '@/utils/logger';
 import BrandLogo from '@/components/ui/BrandLogo.vue';
 import GameButton from '@/components/ui/GameButton.vue';
@@ -105,17 +96,6 @@ const showSettings = ref(false);
 const isReady = computed(() => {
   const me = roomStore.roomPlayers.find((p) => p.userId === authStore.userId);
   return me?.isReady || false;
-});
-
-const getStartHelperText = computed(() => {
-  if (roomStore.roomPlayers.length < MIN_PLAYERS) {
-    return `Need at least ${MIN_PLAYERS} players to start`;
-  }
-  const notReady = roomStore.roomPlayers.filter((p) => !p.isReady);
-  if (notReady.length > 0) {
-    return `Waiting for ${notReady.map((p) => p.displayName).join(', ')} to ready up`;
-  }
-  return '';
 });
 
 const setReady = (ready) => {
@@ -178,24 +158,9 @@ const copyLink = async () => {
 .lobby-title-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: 0.8rem;
   flex-wrap: wrap;
-}
-
-.lobby-room-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  padding: 0.38rem 0.8rem;
-  border-radius: var(--bb-radius-pill);
-  background: rgba(41, 120, 198, 0.12);
-  border: 2px solid rgba(67, 118, 178, 0.38);
-  color: var(--bb-blue-900);
-}
-
-.lobby-room-pill strong {
-  letter-spacing: 0.06em;
 }
 
 .invite-section {
@@ -219,7 +184,7 @@ const copyLink = async () => {
 .code-value {
   font-family: var(--bb-font-display);
   font-size: 1.3rem;
-  color: var(--bb-orange-900);
+  color: var(--bb-blue-900);
   letter-spacing: 0.12em;
 }
 
@@ -253,14 +218,6 @@ const copyLink = async () => {
   display: grid;
   grid-template-columns: 1fr;
   gap: 0.6rem;
-}
-
-.helper-text {
-  margin: 0.8rem 0 0;
-  text-align: center;
-  font-size: 0.9rem;
-  color: var(--bb-orange-900);
-  font-weight: 700;
 }
 
 .lobby-bottom-actions {

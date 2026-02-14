@@ -1,94 +1,92 @@
 .bb-btn {
   position: relative;
-  border: none;
+  border: 1px solid rgba(24, 83, 136, 0.34);
   border-radius: var(--bb-radius-pill);
-  color: var(--bb-cream-100);
-  min-height: 52px;
-  padding: 0.8rem 1.35rem;
+  color: #f7fbff;
+  min-height: 48px;
+  padding: 0.68rem 1.15rem;
   font-family: var(--bb-font-display);
-  font-size: 1.03rem;
+  font-size: 1rem;
   font-weight: 700;
-  letter-spacing: 0.015em;
+  letter-spacing: 0.01em;
   cursor: pointer;
+  overflow: hidden;
   transition: transform 120ms ease, filter 120ms ease, box-shadow 120ms ease;
   box-shadow: var(--bb-shadow-btn);
-  text-shadow: 0 1px 0 rgba(101, 44, 9, 0.6);
+  text-shadow: 0 1px 0 rgba(20, 65, 112, 0.5);
 }
 
 .bb-btn::before {
   content: '';
   position: absolute;
-  top: 4px;
-  left: 8px;
-  right: 8px;
-  height: 45%;
+  top: 1px;
+  left: 1px;
+  right: 1px;
+  height: 44%;
   border-radius: inherit;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0));
   pointer-events: none;
 }
 
 .bb-btn:hover:not(:disabled) {
-  transform: translateY(-1px) scale(1.012);
-  filter: saturate(1.04);
+  transform: translateY(-1px);
+  filter: brightness(1.03);
 }
 
 .bb-btn:active:not(:disabled),
 .bb-btn.is-pressed {
-  transform: translateY(3px) scale(0.995);
-  filter: brightness(0.94);
-  box-shadow: 0 2px 0 rgba(129, 62, 15, 0.95), 0 5px 10px rgba(20, 51, 103, 0.2);
+  transform: translateY(0);
+  filter: brightness(0.96);
+  box-shadow: 0 1px 3px rgba(20, 51, 103, 0.26);
 }
 
 .bb-btn:disabled {
   opacity: 0.58;
   cursor: not-allowed;
+  filter: saturate(0.65);
   box-shadow: none;
   transform: none;
 }
 
 .bb-btn--primary {
   background: var(--bb-bg-primary-btn);
-  box-shadow: var(--bb-shadow-btn);
 }
 
 .bb-btn--secondary {
   background: var(--bb-bg-secondary-btn);
-  box-shadow: var(--bb-shadow-btn-blue);
-  text-shadow: 0 1px 0 rgba(18, 60, 113, 0.65);
 }
 
 .bb-btn--danger {
   background: var(--bb-bg-danger-btn);
-  box-shadow: 0 6px 0 rgba(116, 38, 30, 0.95), 0 10px 18px rgba(20, 51, 103, 0.35);
-  text-shadow: 0 1px 0 rgba(102, 28, 23, 0.65);
+  text-shadow: 0 1px 0 rgba(104, 35, 29, 0.6);
 }
 
 .bb-btn--ghost {
-  background: linear-gradient(180deg, rgba(248, 238, 214, 0.92), rgba(230, 213, 174, 0.92));
-  color: var(--bb-blue-900);
+  background: linear-gradient(180deg, #f7f9fc 0%, #e8eef7 100%);
+  color: #1c4b83;
   text-shadow: none;
-  box-shadow: 0 5px 0 rgba(134, 111, 74, 0.86), 0 10px 18px rgba(20, 51, 103, 0.25);
+  border-color: rgba(57, 95, 141, 0.3);
 }
 
 .bb-btn--sm {
-  min-height: 38px;
-  padding: 0.35rem 0.9rem;
+  min-height: 36px;
+  padding: 0.32rem 0.8rem;
   font-size: 0.86rem;
 }
 
 .bb-btn--lg {
-  min-height: 60px;
-  font-size: 1.14rem;
-  padding: 0.95rem 1.8rem;
+  min-height: 54px;
+  font-size: 1.08rem;
+  padding: 0.86rem 1.5rem;
 }
 
 .bb-panel {
   position: relative;
   border-radius: var(--bb-radius-lg);
   background: var(--bb-bg-panel);
-  border: 3px solid rgba(87, 125, 169, 0.82);
-  box-shadow: var(--bb-shadow-panel), inset 0 2px 0 rgba(255, 255, 255, 0.7), inset 0 -4px 0 rgba(145, 103, 56, 0.22);
-  padding: 1.3rem;
+  border: 1px solid rgba(80, 118, 162, 0.48);
+  box-shadow: var(--bb-shadow-panel);
+  padding: 1.05rem;
 }
 
 .bb-panel--alt {
@@ -97,37 +95,37 @@
 
 .bb-panel__ribbon {
   position: absolute;
-  top: -20px;
+  top: -14px;
   left: 50%;
   transform: translateX(-50%);
-  min-width: 150px;
+  min-width: 138px;
   max-width: calc(100% - 2rem);
   text-align: center;
-  background: linear-gradient(180deg, #ffc27c 0%, #ec8f3a 100%);
+  background: linear-gradient(180deg, #f6b665 0%, #e28f3b 100%);
   color: #fff7e9;
-  padding: 0.35rem 1rem;
+  padding: 0.26rem 0.72rem;
   border-radius: var(--bb-radius-pill);
-  border: 2px solid rgba(125, 64, 16, 0.42);
+  border: 1px solid rgba(112, 67, 28, 0.45);
   font-family: var(--bb-font-display);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 700;
-  box-shadow: 0 6px 0 rgba(131, 66, 19, 0.85);
+  box-shadow: 0 2px 6px rgba(75, 53, 31, 0.2);
 }
 
 .bb-input {
   width: 100%;
-  min-height: 52px;
+  min-height: 48px;
   border-radius: var(--bb-radius-pill);
-  border: 2px solid rgba(69, 113, 173, 0.5);
-  background: linear-gradient(180deg, #fdf8e6 0%, #f2e2bf 100%);
+  border: 1px solid rgba(69, 113, 173, 0.42);
+  background: #f6ecd6;
   color: var(--bb-blue-900);
-  padding: 0.68rem 1rem;
+  padding: 0.64rem 0.9rem;
   text-align: center;
-  font-size: 1rem;
+  font-size: 0.98rem;
   font-weight: 600;
   letter-spacing: 0.01em;
   outline: none;
-  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.8), inset 0 -3px 6px rgba(157, 111, 51, 0.18);
+  box-shadow: none;
   transition: box-shadow 150ms ease, border-color 150ms ease, transform 150ms ease;
 }
 
@@ -138,15 +136,15 @@
 
 .bb-input:focus {
   border-color: rgba(55, 137, 212, 0.95);
-  box-shadow: 0 0 0 4px rgba(92, 173, 248, 0.24), inset 0 2px 0 rgba(255, 255, 255, 0.8);
-  transform: translateY(-1px);
+  box-shadow: 0 0 0 3px rgba(92, 173, 248, 0.18);
+  transform: none;
 }
 
 .bb-chip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--bb-radius-pill);
+  border-radius: var(--bb-radius-sm);
   padding: 0.2rem 0.65rem;
   background: rgba(22, 83, 153, 0.14);
   color: var(--bb-blue-900);
@@ -158,8 +156,8 @@
 .bb-modal {
   border-radius: var(--bb-radius-lg);
   background: var(--bb-bg-panel);
-  border: 3px solid rgba(87, 125, 169, 0.8);
-  box-shadow: 0 22px 40px rgba(20, 52, 101, 0.42), inset 0 2px 0 rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(87, 125, 169, 0.58);
+  box-shadow: 0 12px 24px rgba(20, 52, 101, 0.28);
 }
 
 .bb-slider {

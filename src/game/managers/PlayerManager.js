@@ -297,10 +297,10 @@ export class PlayerManager {
         const handcuffScale = Math.max(0.1, avatarScale * 0.45);
         const handcuffHalfH = (handcuffSize.height * handcuffScale) / 2;
 
-        // ItemRenderer uses max 6 columns with spacing 36 and max icon size 38.
+        // ItemRenderer uses max 6 columns with spacing 28 and max icon size 29.
         const maxItemColumns = 6;
-        const itemSpacing = 36;
-        const itemMaxDim = 38;
+        const itemSpacing = 28;
+        const itemMaxDim = 29;
         const itemRowWidth = ((maxItemColumns - 1) * itemSpacing) + itemMaxDim;
         const itemHalfH = itemMaxDim / 2;
 
@@ -312,7 +312,7 @@ export class PlayerManager {
 
         const isTopHalf = y <= layout.HEIGHT * 0.47;
         const heartY = isLocal ? 58 : (isTopHalf ? 58 : -58);
-        const itemsY = isTopHalf ? 84 : -84;
+        const itemsY = isTopHalf ? 68 : -68;
 
         // Horizontal clamp is based on avatar/hearts footprint.
         // Side item rows are shifted inward separately so avatars can stay near edges.
@@ -373,7 +373,7 @@ export class PlayerManager {
         const delta = playerX - centerX;
         if (Math.abs(delta) < 26) return 0;
         const direction = Math.sign(delta);
-        return -direction * 56;
+        return -direction * 46;
     }
 
     /**
@@ -445,7 +445,7 @@ export class PlayerManager {
 
             const isTopHalf = pos.y <= layout.HEIGHT * 0.47;
             const heartY = pos.isLocal ? 58 : (isTopHalf ? 58 : -58);
-            const itemsY = isTopHalf ? 84 : -84;
+            const itemsY = isTopHalf ? 68 : -68;
             const heartsX = this.getHeartsHorizontalOffset(pos.x);
             const itemsX = this.getItemsHorizontalOffset(pos.x);
             const heartContainer = this.scene.add.container(heartsX, heartY);
@@ -647,7 +647,7 @@ export class PlayerManager {
 
             const maxHealth = player.maxHealth || 4;
             const heartDisplayWidth = this.getHeartDisplayWidth(this.playerContainers.length);
-            const heartSpacing = Math.max(14, Math.round(heartDisplayWidth * 1.1));
+            const heartSpacing = Math.max(11, Math.round(heartDisplayWidth * 0.95));
             const startX = -((maxHealth - 1) * heartSpacing) / 2;
             const isCurrentTurn = i === state.currentTurnIndex;
 
@@ -692,8 +692,8 @@ export class PlayerManager {
             ? 1
             : (count === 5 ? 0.9 : (count === 6 ? 0.82 : (count === 7 ? 0.74 : 0.68)));
 
-        const scaled = Math.round((layout.WIDTH / 360) * 18 * countScale);
-        return Math.max(12, Math.min(24, scaled));
+        const scaled = Math.round((layout.WIDTH / 360) * 16 * countScale);
+        return Math.max(11, Math.min(22, scaled));
     }
 
     /**

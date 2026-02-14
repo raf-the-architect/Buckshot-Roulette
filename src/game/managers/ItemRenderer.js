@@ -17,7 +17,7 @@ export class ItemRenderer {
         container.removeAll(true);
 
         const groupedItems = this.groupItems(items || []);
-        const itemSpacing = 36;
+        const itemSpacing = 28;
         const startX = -((Math.min(groupedItems.length, 6) - 1) * itemSpacing) / 2;
 
         groupedItems.forEach((entry, i) => {
@@ -28,9 +28,9 @@ export class ItemRenderer {
             const col = i % 6;
             const row = Math.floor(i / 6);
             const tx = startX + col * itemSpacing;
-            const ty = row * 42;
+            const ty = row * 32;
 
-            const maxDim = 38;
+            const maxDim = 29;
             const icon = this.scene.imageService.createImage(tx, ty, assetKey);
             const scale = this.scene.imageService.setScaleFromMaxDimension(icon, maxDim, { allowUpscale: true });
 
@@ -79,7 +79,7 @@ export class ItemRenderer {
                 const badgeCircle = this.scene.add.circle(
                     tx + badgeOffsetX,
                     ty + badgeOffsetY,
-                    9,
+                    7,
                     0xe53935,
                     0.95
                 );
@@ -89,7 +89,7 @@ export class ItemRenderer {
                     String(count),
                     {
                         fontFamily: "Arial, sans-serif",
-                        fontSize: "10px",
+                        fontSize: "9px",
                         fontStyle: "bold",
                         color: "#ffffff"
                     }
