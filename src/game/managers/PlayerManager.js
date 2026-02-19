@@ -22,6 +22,7 @@ export class PlayerManager {
         this.playerContainers = [];
         this.lastClockLayoutKey = null;
         this.offlineSinceByUserId = new Map();
+        this.dangerOverlayTextureKey = "dangerPanelVignette";
     }
 
     /**
@@ -36,6 +37,140 @@ export class PlayerManager {
      */
     getScale() {
         return this.scene.getScale();
+    }
+
+    /**
+     * Ensure reusable danger vignette texture exists.
+     * @returns {string | null}
+     */
+    ensureDangerOverlayTexture() {
+        const key = this.dangerOverlayTextureKey;
+        if (this.scene.textures?.exists?.(key)) return key;
+
+        const size = 512;
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return null;
+
+        ctx.clearRect(0, 0, size, size);
+
+        const cx = size / 2;
+        const cy = size / 2;
+        const radial = ctx.createRadialGradient(cx, cy, size * 0.12, cx, cy, size * 0.64);
+        radial.addColorStop(0, "rgba(22,0,0,0)");
+        radial.addColorStop(0.48, "rgba(86,0,0,0.2)");
+        radial.addColorStop(0.74, "rgba(128,0,0,0.56)");
+        radial.addColorStop(1, "rgba(76,0,0,0.95)");
+        ctx.fillStyle = radial;
+        ctx.fillRect(0, 0, size, size);
+
+        this.scene.textures.addCanvas(key, canvas);
+        return key;
+    }
+
+    /**
+     * Stop danger overlay tweens for one player container.
+     * @param {object} pc - Player container bundle.
+     */
+    clearDangerOverlayTweens(pc) {
+        if (!pc) return;
+        if (pc.dangerPulseTween) {
+            pc.dangerPulseTween.stop();
+            pc.dangerPulseTween.remove();
+            pc.dangerPulseTween = null;
+        }
+        if (pc.dangerOverlay) {
+            this.scene.tweens.killTweensOf(pc.dangerOverlay);
+        }
+    }
+
+    /**
+     * Resize panel danger overlay to match current cluster footprint.
+     * @param {object} pc - Player container bundle.
+     * @param {number} playerCount - Total player count.
+     */
+    updateDangerOverlayGeometry(pc, playerCount) {
+        if (!pc?.dangerOverlay || !pc?.container) return;
+
+        const count = Math.max(2, Math.min(8, Number(playerCount) || 2));
+        const groupScale = this.getPlayerGroupScale();
+        const edgePadding = 10;
+        const y = Number(pc.container.y) || (this.getLayout().HEIGHT / 2);
+        const padding = this.getClusterViewportPadding(count, y, !!pc.isLocalPlayer);
+
+        const width = Math.max(
+            180,
+            ((padding.left + padding.right) - (edgePadding * 2)) / Math.max(groupScale, 0.001)
+        );
+        const height = Math.max(
+            150,
+            ((padding.top + padding.bottom) - (edgePadding * 2)) / Math.max(groupScale, 0.001)
+        );
+
+        pc.dangerOverlay.setDisplaySize(width, height);
+        pc.dangerOverlay.setPosition(0, 0);
+    }
+
+    /**
+     * Animate danger overlay in and keep subtle pulse while active.
+     * @param {object} pc - Player container bundle.
+     */
+    showDangerOverlay(pc) {
+        if (!pc?.dangerOverlay) return;
+        if (pc.isDangerActive) return;
+
+        pc.isDangerActive = true;
+        this.clearDangerOverlayTweens(pc);
+
+        pc.dangerOverlay.setVisible(true);
+        pc.dangerOverlay.setScale(1);
+        pc.dangerOverlay.setAlpha(0);
+
+        this.scene.tweens.add({
+            targets: pc.dangerOverlay,
+            alpha: 0.82,
+            duration: 180,
+            ease: "Cubic.easeOut",
+            onComplete: () => {
+                if (!pc.isDangerActive || !pc.dangerOverlay) return;
+                pc.dangerPulseTween = this.scene.tweens.add({
+                    targets: pc.dangerOverlay,
+                    alpha: { from: 0.72, to: 0.88 },
+                    scale: { from: 1, to: 1.03 },
+                    duration: 620,
+                    ease: "Sine.easeInOut",
+                    yoyo: true,
+                    repeat: -1
+                });
+            }
+        });
+    }
+
+    /**
+     * Animate danger overlay out and stop pulse.
+     * @param {object} pc - Player container bundle.
+     */
+    hideDangerOverlay(pc) {
+        if (!pc?.dangerOverlay) return;
+        if (!pc.isDangerActive && !pc.dangerOverlay.visible) return;
+        if (!pc.isDangerActive && this.scene.tweens.isTweening(pc.dangerOverlay)) return;
+
+        pc.isDangerActive = false;
+        this.clearDangerOverlayTweens(pc);
+
+        this.scene.tweens.add({
+            targets: pc.dangerOverlay,
+            alpha: 0,
+            duration: 130,
+            ease: "Quad.easeOut",
+            onComplete: () => {
+                if (!pc.dangerOverlay || pc.isDangerActive) return;
+                pc.dangerOverlay.setVisible(false);
+                pc.dangerOverlay.setScale(1);
+            }
+        });
     }
 
     /**
@@ -278,6 +413,41 @@ export class PlayerManager {
     }
 
     /**
+     * Resolve centered heart/item row offsets for one player cluster.
+     * @param {number} y - Candidate Y position (after local offset).
+     * @param {boolean} isLocal - Whether this is local player.
+     * @returns {{heartX:number, heartY:number, itemsX:number, itemsY:number}}
+     */
+    getClusterAccessoryOffsets(y, isLocal) {
+        const layout = this.getLayout();
+        if (isLocal) {
+            return {
+                heartX: 0,
+                heartY: 58,
+                itemsX: 0,
+                itemsY: -50
+            };
+        }
+
+        const isTopHalf = y <= layout.HEIGHT * 0.47;
+        if (isTopHalf) {
+            return {
+                heartX: 0,
+                heartY: 58,
+                itemsX: 0,
+                itemsY: 92
+            };
+        }
+
+        return {
+            heartX: 0,
+            heartY: -58,
+            itemsX: 0,
+            itemsY: -92
+        };
+    }
+
+    /**
      * Compute safe viewport paddings for one player cluster.
      * @param {number} playerCount - Current player count.
      * @param {number} y - Candidate Y position (after local offset).
@@ -302,21 +472,24 @@ export class PlayerManager {
         const itemSpacing = 28;
         const itemMaxDim = 29;
         const itemRowWidth = ((maxItemColumns - 1) * itemSpacing) + itemMaxDim;
+        const itemRowHalfW = itemRowWidth / 2;
         const itemHalfH = itemMaxDim / 2;
 
+        const maxHealth = playerCount > 4 ? 3 : 4;
         const heartDisplayWidth = this.getHeartDisplayWidth(playerCount);
+        const heartSpacing = Math.max(11, Math.round(heartDisplayWidth * 0.95));
+        const heartRowWidth = ((maxHealth - 1) * heartSpacing) + heartDisplayWidth;
+        const heartRowHalfW = heartRowWidth / 2;
         const heartHalfH = heartDisplayWidth / 2;
 
         const nameY = Math.round(38 * (avatarScale / Math.max(scale.AVATAR, 0.001)));
         const nameHalfH = 9;
 
-        const isTopHalf = y <= layout.HEIGHT * 0.47;
-        const heartY = isLocal ? 58 : (isTopHalf ? 58 : -58);
-        const itemsY = isTopHalf ? 68 : -68;
+        const accessoryOffsets = this.getClusterAccessoryOffsets(y, isLocal);
+        const heartY = accessoryOffsets.heartY;
+        const itemsY = accessoryOffsets.itemsY;
 
-        // Horizontal clamp is based on avatar/hearts footprint.
-        // Side item rows are shifted inward separately so avatars can stay near edges.
-        const leftRightExtent = Math.max(avatarHalfW, 28);
+        const leftRightExtent = Math.max(avatarHalfW, heartRowHalfW, itemRowHalfW, 28);
         const topExtent = Math.max(
             avatarHalfH,
             -Math.min(heartY - heartHalfH, 0),
@@ -364,32 +537,6 @@ export class PlayerManager {
     }
 
     /**
-     * Shift side item rows inward to avoid viewport clipping while keeping avatars near edges.
-     * @param {number} playerX - Player container x.
-     * @returns {number}
-     */
-    getItemsHorizontalOffset(playerX) {
-        const centerX = this.getLayout().CENTER_X;
-        const delta = playerX - centerX;
-        if (Math.abs(delta) < 26) return 0;
-        const direction = Math.sign(delta);
-        return -direction * 46;
-    }
-
-    /**
-     * Shift side heart rows inward to keep them visible while avatars stay near edges.
-     * @param {number} playerX - Player container x.
-     * @returns {number}
-     */
-    getHeartsHorizontalOffset(playerX) {
-        const centerX = this.getLayout().CENTER_X;
-        const delta = playerX - centerX;
-        if (Math.abs(delta) < 26) return 0;
-        const direction = Math.sign(delta);
-        return -direction * 14;
-    }
-
-    /**
      * Internal helper to create visual containers.
      * @param {Array<object>} positions - Precomputed player positions.
      */
@@ -403,7 +550,10 @@ export class PlayerManager {
         const glowRadius = Math.max(32, Math.round(52 * (avatarScale / Math.max(scale.AVATAR, 0.001))));
         const playerGroupScale = this.getPlayerGroupScale();
 
-        this.playerContainers.forEach((pc) => pc?.container?.destroy(true));
+        this.playerContainers.forEach((pc) => {
+            this.clearDangerOverlayTweens(pc);
+            pc?.container?.destroy(true);
+        });
         this.playerContainers = [];
         this.lastClockLayoutKey = `${layout.WIDTH}x${layout.HEIGHT}:${playerCount}`;
 
@@ -443,13 +593,9 @@ export class PlayerManager {
             nameBg.fillRoundedRect(-bgW / 2, nameY - bgH / 2, bgW, bgH, 10);
             nameBg.setDepth(1);
 
-            const isTopHalf = pos.y <= layout.HEIGHT * 0.47;
-            const heartY = pos.isLocal ? 58 : (isTopHalf ? 58 : -58);
-            const itemsY = isTopHalf ? 68 : -68;
-            const heartsX = this.getHeartsHorizontalOffset(pos.x);
-            const itemsX = this.getItemsHorizontalOffset(pos.x);
-            const heartContainer = this.scene.add.container(heartsX, heartY);
-            const itemsContainer = this.scene.add.container(itemsX, itemsY);
+            const accessoryOffsets = this.getClusterAccessoryOffsets(pos.y, pos.isLocal);
+            const heartContainer = this.scene.add.container(accessoryOffsets.heartX, accessoryOffsets.heartY);
+            const itemsContainer = this.scene.add.container(accessoryOffsets.itemsX, accessoryOffsets.itemsY);
             const handcuffContainer = this.scene.add.container(0, -42);
             const handcuffIcon = this.scene.imageService.createImage(0, 0, "itemHandcuffs", {
                 scale: Math.max(0.1, avatarScale * 0.45),
@@ -468,8 +614,19 @@ export class PlayerManager {
                 .setStrokeStyle(1, 0xffffff, 0.9)
                 .setVisible(false)
                 .setDepth(3);
+            const dangerTexture = this.ensureDangerOverlayTexture();
+            const dangerOverlay = dangerTexture
+                ? this.scene.imageService.createImage(0, 0, dangerTexture, { alpha: 0, visible: false })
+                : null;
+            if (dangerOverlay) {
+                dangerOverlay.setDepth(20);
+            }
 
-            container.add([glowRing, avatar, nameBg, nameText, heartContainer, itemsContainer, handcuffContainer, afkBadge]);
+            const elements = [glowRing, avatar, nameBg, nameText, heartContainer, itemsContainer, handcuffContainer, afkBadge];
+            if (dangerOverlay) {
+                elements.push(dangerOverlay);
+            }
+            container.add(elements);
 
             this.playerContainers[i] = {
                 container,
@@ -486,6 +643,9 @@ export class PlayerManager {
                 handcuffBadge,
                 handcuffBadgeText,
                 afkBadge,
+                dangerOverlay,
+                dangerPulseTween: null,
+                isDangerActive: false,
                 isLocalPlayer: pos.isLocal,
                 clockHour: pos.clockHour,
                 baseAvatarScale: avatarScale
@@ -493,6 +653,7 @@ export class PlayerManager {
 
             container.setDepth(10);
             container.setScale(playerGroupScale);
+            this.updateDangerOverlayGeometry(this.playerContainers[i], playerCount);
 
             this.scene.tweens.add({
                 targets: container,
@@ -538,11 +699,14 @@ export class PlayerManager {
             pc.container.y = nextY;
             pc.container.setScale(playerGroupScale);
             pc.avatar.setFlipX(clampedPos.x > metrics.centerX + 2);
+            const accessoryOffsets = this.getClusterAccessoryOffsets(nextY, isLocal);
             if (pc.heartContainer) {
-                pc.heartContainer.x = this.getHeartsHorizontalOffset(clampedPos.x);
+                pc.heartContainer.x = accessoryOffsets.heartX;
+                pc.heartContainer.y = accessoryOffsets.heartY;
             }
             if (pc.itemsContainer) {
-                pc.itemsContainer.x = this.getItemsHorizontalOffset(clampedPos.x);
+                pc.itemsContainer.x = accessoryOffsets.itemsX;
+                pc.itemsContainer.y = accessoryOffsets.itemsY;
             }
 
             this.scene.tweens.killTweensOf(pc.container);
@@ -561,8 +725,9 @@ export class PlayerManager {
      * Update avatar visuals based on current game state.
      * @param {object} state - Current scene state.
      * @param {number | null} targetedIndex - Selected target index.
+     * @param {number | null} dangerTargetedIndex - Danger-highlighted target index.
      */
-    updateAvatarStates(state, targetedIndex = null) {
+    updateAvatarStates(state, targetedIndex = null, dangerTargetedIndex = null) {
         if (!this.playerContainers || !state?.players) return;
 
         this.reflowMultiplayerClockPositions();
@@ -574,6 +739,7 @@ export class PlayerManager {
             const isCurrentTurn = index === state.currentTurnIndex;
             const isDead = player.health <= 0 || player.alive === false;
             const isTargeted = index === targetedIndex;
+            const isDangerTarget = index === dangerTargetedIndex;
             const usesBotAvatar = player.id === "BOT";
             const baseScale = pc.baseAvatarScale || this.getScale().AVATAR;
 
@@ -622,6 +788,13 @@ export class PlayerManager {
                 pc.avatar.setAlpha(0.8);
                 pc.glowRing.setAlpha(0);
                 pc.avatar.setScale(baseScale);
+            }
+
+            this.updateDangerOverlayGeometry(pc, state.players.length);
+            if (!isDead && isDangerTarget) {
+                this.showDangerOverlay(pc);
+            } else {
+                this.hideDangerOverlay(pc);
             }
         });
 

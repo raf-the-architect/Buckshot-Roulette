@@ -6,9 +6,16 @@
 import { ITEM_ASSET_MAP } from "./LayoutConfig.js";
 import { ITEM_KEYS } from "./gameLogic.js";
 
+const GUN_IMPACT_DEPTH = 90;
+const GUN_IMPACT_ENTRY_MS = 180;
+const GUN_IMPACT_HOLD_MS = 620;
+const GUN_IMPACT_EXIT_MS = 200;
+const GUN_IMPACT_TOTAL_MS = GUN_IMPACT_ENTRY_MS + GUN_IMPACT_HOLD_MS + GUN_IMPACT_EXIT_MS;
+
 export class EffectsManager {
     constructor(scene) {
         this.scene = scene;
+        this.gunImpactSprite = null;
     }
 
     /**
@@ -99,6 +106,106 @@ export class EffectsManager {
                 repeat: 1
             });
         }
+    }
+
+    /**
+     * Destroy any active gun-impact sprite and stop tweens.
+     */
+    clearGunImpactEffect() {
+        if (!this.gunImpactSprite) return;
+        this.scene.tweens.killTweensOf(this.gunImpactSprite);
+        this.gunImpactSprite.destroy();
+        this.gunImpactSprite = null;
+    }
+
+    /**
+     * Play high-impact revolver overlay animation.
+     * @param {{targetIndex?: number, wasLive?: boolean, shouldDisplay?: boolean}} params
+     * @returns {number} Effect duration in milliseconds.
+     */
+    playGunImpactEffect(params = {}) {
+        const {
+            targetIndex = null,
+            wasLive = false,
+            shouldDisplay = true
+        } = params;
+
+        this.clearGunImpactEffect();
+        if (!shouldDisplay) return 0;
+
+        const layout = this.getLayout();
+        const targetContainer = Number.isInteger(targetIndex)
+            ? this.scene.players?.getContainer?.(targetIndex)?.container
+            : null;
+        const targetY = targetContainer?.y ?? (layout.HEIGHT / 2);
+        const impactY = Phaser.Math.Clamp(targetY, layout.HEIGHT * 0.36, layout.HEIGHT * 0.64);
+
+        const impact = this.scene.imageService.createImage(
+            layout.CENTER_X,
+            impactY,
+            "revolverImpact",
+            {
+                alpha: 0,
+                depth: GUN_IMPACT_DEPTH
+            }
+        );
+        this.gunImpactSprite = impact;
+
+        const targetWidth = Math.round(layout.WIDTH * 0.9);
+        this.scene.imageService.setScaleFromWidth(impact, targetWidth);
+        if (impact.displayHeight > layout.HEIGHT * 0.95) {
+            this.scene.imageService.fitImageToBounds(impact, targetWidth, layout.HEIGHT * 0.95, {
+                allowUpscale: true
+            });
+        }
+
+        const finalScaleX = impact.scaleX;
+        const finalScaleY = impact.scaleY;
+        impact.setScale(finalScaleX * 0.85, finalScaleY * 0.85);
+
+        if (this.scene.cache?.audio?.exists?.("sndGunImpactHit")) {
+            try {
+                this.scene.sound.play("sndGunImpactHit", { volume: 0.5 });
+            } catch (_err) {
+                // Optional hook: ignore failures when key isn't ready.
+            }
+        }
+
+        this.triggerEffect("shake", {
+            duration: wasLive ? 130 : 90,
+            intensity: wasLive ? 0.007 : 0.0035
+        });
+
+        this.scene.tweens.add({
+            targets: impact,
+            alpha: 1,
+            scaleX: finalScaleX,
+            scaleY: finalScaleY,
+            duration: GUN_IMPACT_ENTRY_MS,
+            ease: "Back.easeOut",
+            onComplete: () => {
+                this.scene.time.delayedCall(GUN_IMPACT_HOLD_MS, () => {
+                    if (!this.gunImpactSprite || this.gunImpactSprite !== impact) return;
+
+                    this.scene.tweens.add({
+                        targets: impact,
+                        alpha: 0,
+                        scaleX: finalScaleX * 0.92,
+                        scaleY: finalScaleY * 0.92,
+                        y: impactY + 10,
+                        duration: GUN_IMPACT_EXIT_MS,
+                        ease: "Cubic.easeIn",
+                        onComplete: () => {
+                            if (this.gunImpactSprite === impact) {
+                                this.clearGunImpactEffect();
+                            }
+                        }
+                    });
+                });
+            }
+        });
+
+        return GUN_IMPACT_TOTAL_MS;
     }
 
     // ==========================================================================

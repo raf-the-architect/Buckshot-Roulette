@@ -184,6 +184,7 @@ const buildTurnContext = (playerId) => ({
     timeRemaining: TURN_TIME_LIMIT,
     selectedItem: null,
     targetPlayerId: null,
+    targetMode: null,
     hasShot: false,
     revealedRound: null,
     revealSyncedRound: null
@@ -777,6 +778,85 @@ export const useGameStore = defineStore('game', () => {
     };
 
     /**
+     * Update the active turn's selected target for synchronized UI highlighting.
+     * This update is intentionally non-authoritative for game outcome and does not bump stateVersion.
+     * @param {string | null} targetPlayerId - Selected target user id or null.
+     * @param {'shoot' | 'item' | null} targetMode - Selection context mode.
+     * @returns {Promise<{changed: boolean, targetPlayerId: string | null, targetMode: string | null}>}
+     */
+    const setTurnTarget = async (targetPlayerId = null, targetMode = null) => {
+        const authStore = useAuthStore();
+        const actorUserId = authStore.userId;
+        const id = gameId.value;
+        if (!actorUserId || !id) {
+            return {
+                changed: false,
+                targetPlayerId: null,
+                targetMode: null
+            };
+        }
+
+        const normalizedTargetId = targetPlayerId || null;
+        const requestedMode = (targetMode === 'shoot' || targetMode === 'item') ? targetMode : null;
+        const normalizedTargetMode = normalizedTargetId ? requestedMode : null;
+        const gameRef = doc(db, 'games', id);
+
+        const summary = await runTransaction(db, async (transaction) => {
+            const gameSnap = await transaction.get(gameRef);
+            if (!gameSnap.exists()) throw new Error('Game not found');
+
+            const game = gameSnap.data();
+            assertActionPreconditions(game, actorUserId);
+
+            const players = game.players || [];
+            if (normalizedTargetId) {
+                const target = players.find(p => p.userId === normalizedTargetId);
+                if (!target || !target.isAlive) {
+                    throw new Error('Target required');
+                }
+            }
+
+            const currentTarget = game.turnContext?.targetPlayerId || null;
+            const currentModeRaw = game.turnContext?.targetMode;
+            const currentMode = (currentModeRaw === 'shoot' || currentModeRaw === 'item')
+                ? currentModeRaw
+                : null;
+
+            if (currentTarget === normalizedTargetId && currentMode === normalizedTargetMode) {
+                return {
+                    changed: false,
+                    targetPlayerId: normalizedTargetId,
+                    targetMode: normalizedTargetMode
+                };
+            }
+
+            transaction.update(gameRef, {
+                turnContext: {
+                    ...(game.turnContext || buildTurnContext(actorUserId)),
+                    targetPlayerId: normalizedTargetId,
+                    targetMode: normalizedTargetMode
+                },
+                updatedAt: serverTimestamp()
+            });
+
+            return {
+                changed: true,
+                targetPlayerId: normalizedTargetId,
+                targetMode: normalizedTargetMode
+            };
+        });
+
+        if (summary.changed) {
+            logger.debug('turn_target_updated', {
+                targetPlayerId: summary.targetPlayerId,
+                targetMode: summary.targetMode
+            });
+        }
+
+        return summary;
+    };
+
+    /**
      * Apply an item use with transaction-level turn validation.
      * @param {string} itemType - Item key from `ITEMS`.
      * @param {string | null} targetPlayerId - Optional target user id.
@@ -817,7 +897,11 @@ export const useGameStore = defineStore('game', () => {
                 ...(game.shotgun || {}),
                 chamber: [...(game.shotgun?.chamber || [])]
             };
-            const turnContext = { ...(game.turnContext || {}) };
+            const turnContext = {
+                ...(game.turnContext || {}),
+                targetPlayerId: null,
+                targetMode: null
+            };
             const stateVersionBefore = Number(game.stateVersion || 0);
             const stateVersionAfter = stateVersionBefore + 1;
 
@@ -846,6 +930,7 @@ export const useGameStore = defineStore('game', () => {
                     if (!target) throw new Error('Target required');
                     const pendingBefore = Math.max(0, Number(target.pendingSkipTurns || 0));
                     target.pendingSkipTurns = pendingBefore + 1;
+                    turnContext.targetPlayerId = null;
                     itemResult.targetId = resolvedTargetId;
                     itemResult.targetPendingSkipsBefore = pendingBefore;
                     itemResult.targetPendingSkipsAfter = target.pendingSkipTurns;
@@ -1069,7 +1154,9 @@ export const useGameStore = defineStore('game', () => {
             let turnContext = {
                 ...(game.turnContext || {}),
                 hasShot: true,
-                revealedRound: null
+                revealedRound: null,
+                targetPlayerId: null,
+                targetMode: null
             };
 
             const alivePlayers = players.filter(p => p.isAlive);
@@ -1436,6 +1523,7 @@ export const useGameStore = defineStore('game', () => {
         markStartLoaded,
         setClientRevealPhaseActive,
         syncTurnStartAfterReveal,
+        setTurnTarget,
         useItem,
         performShoot,
         endTurn,

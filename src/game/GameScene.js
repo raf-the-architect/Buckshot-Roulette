@@ -42,6 +42,7 @@ const MULTIPLAYER_ACTION_SYNC_LEAD_MS = 180;
 const MULTIPLAYER_ACTION_FALLBACK_DURATION_MS = 520;
 const REVEAL_SEEN_STORAGE_KEY = 'bang_or_blank_seen_round_reveal';
 const LEGACY_REVEAL_SEEN_STORAGE_KEY = 'buckshot_seen_round_reveal';
+const DANGER_SCREEN_DEPTH = 85;
 
 export class GameScene extends Phaser.Scene {
   constructor() {
@@ -66,6 +67,10 @@ export class GameScene extends Phaser.Scene {
     this.bgImage = null;
     this.bgShade = null;
     this.resizeHandler = null;
+    this.dangerScreenOverlay = null;
+    this.dangerScreenPulseTween = null;
+    this.dangerScreenActive = false;
+    this.dangerScreenTextureKey = 'dangerScreenVignette';
     this.localPlayerIndex = 0;
     this.lastAfkUiSyncAtMs = 0;
     this.pendingMultiplayerItemSelection = null;
@@ -94,6 +99,9 @@ export class GameScene extends Phaser.Scene {
     this.localPlayerIndex = 0;
     this.lastAfkUiSyncAtMs = 0;
     this.pendingMultiplayerItemSelection = null;
+    this.dangerScreenOverlay = null;
+    this.dangerScreenPulseTween = null;
+    this.dangerScreenActive = false;
   }
 
   /**
@@ -220,6 +228,163 @@ export class GameScene extends Phaser.Scene {
     return this.localPlayerIndex || 0;
   }
 
+  /**
+   * Resolve active turn actor user id from authoritative state.
+   * @returns {string | null}
+   */
+  getTurnActorUserId() {
+    if (!this.isMultiplayer) return null;
+    const game = this.gameStore?.currentGame;
+    return game?.turnContext?.playerId || game?.players?.[game?.currentTurn]?.userId || null;
+  }
+
+  /**
+   * Ensure reusable full-screen danger vignette texture exists.
+   * @returns {string | null}
+   */
+  ensureDangerScreenTexture() {
+    const key = this.dangerScreenTextureKey;
+    if (this.textures?.exists?.(key)) return key;
+
+    const size = 1024;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    ctx.clearRect(0, 0, size, size);
+
+    const center = size / 2;
+    const radial = ctx.createRadialGradient(center, center, size * 0.1, center, center, size * 0.66);
+    radial.addColorStop(0, 'rgba(28, 0, 0, 0)');
+    radial.addColorStop(0.44, 'rgba(70, 0, 0, 0.20)');
+    radial.addColorStop(0.72, 'rgba(120, 0, 0, 0.54)');
+    radial.addColorStop(1, 'rgba(76, 0, 0, 0.94)');
+    ctx.fillStyle = radial;
+    ctx.fillRect(0, 0, size, size);
+
+    this.textures.addCanvas(key, canvas);
+    return key;
+  }
+
+  /**
+   * Create the full-screen danger overlay.
+   */
+  setupDangerScreenOverlay() {
+    const texture = this.ensureDangerScreenTexture();
+    if (!texture) return;
+
+    const layout = this.getLayout();
+    this.dangerScreenOverlay = this.imageService.createImage(
+      layout.CENTER_X,
+      layout.HEIGHT / 2,
+      texture,
+      {
+        alpha: 0,
+        visible: false,
+        depth: DANGER_SCREEN_DEPTH
+      }
+    );
+    this.updateDangerScreenOverlayLayout(layout);
+  }
+
+  /**
+   * Keep full-screen danger overlay fitted to viewport.
+   * @param {object} layout - Responsive layout constants.
+   */
+  updateDangerScreenOverlayLayout(layout = this.getLayout()) {
+    if (!this.dangerScreenOverlay) return;
+
+    this.dangerScreenOverlay.setPosition(layout.CENTER_X, layout.HEIGHT / 2);
+    this.dangerScreenOverlay.setDisplaySize(layout.WIDTH * 1.1, layout.HEIGHT * 1.1);
+  }
+
+  /**
+   * Stop full-screen danger pulse tween.
+   */
+  clearDangerScreenPulseTween() {
+    if (this.dangerScreenPulseTween) {
+      this.dangerScreenPulseTween.stop();
+      this.dangerScreenPulseTween.remove();
+      this.dangerScreenPulseTween = null;
+    }
+  }
+
+  /**
+   * Show full-screen danger overlay with fast entry + subtle pulse.
+   */
+  showDangerScreenOverlay() {
+    if (!this.dangerScreenOverlay) return;
+    if (this.dangerScreenActive) return;
+
+    this.dangerScreenActive = true;
+    this.clearDangerScreenPulseTween();
+    this.tweens.killTweensOf(this.dangerScreenOverlay);
+
+    this.updateDangerScreenOverlayLayout(this.getLayout());
+    this.dangerScreenOverlay.setVisible(true);
+    this.dangerScreenOverlay.setScale(1);
+    this.dangerScreenOverlay.setAlpha(0);
+
+    this.tweens.add({
+      targets: this.dangerScreenOverlay,
+      alpha: 0.84,
+      duration: 180,
+      ease: 'Cubic.easeOut',
+      onComplete: () => {
+        if (!this.dangerScreenActive || !this.dangerScreenOverlay) return;
+        this.dangerScreenPulseTween = this.tweens.add({
+          targets: this.dangerScreenOverlay,
+          alpha: { from: 0.74, to: 0.89 },
+          scale: { from: 1, to: 1.02 },
+          duration: 620,
+          ease: 'Sine.easeInOut',
+          yoyo: true,
+          repeat: -1
+        });
+      }
+    });
+  }
+
+  /**
+   * Hide full-screen danger overlay quickly.
+   */
+  hideDangerScreenOverlay() {
+    if (!this.dangerScreenOverlay) return;
+    if (!this.dangerScreenActive && !this.dangerScreenOverlay.visible) return;
+    if (!this.dangerScreenActive && this.tweens.isTweening(this.dangerScreenOverlay)) return;
+
+    this.dangerScreenActive = false;
+    this.clearDangerScreenPulseTween();
+    this.tweens.killTweensOf(this.dangerScreenOverlay);
+
+    this.tweens.add({
+      targets: this.dangerScreenOverlay,
+      alpha: 0,
+      duration: 130,
+      ease: 'Quad.easeOut',
+      onComplete: () => {
+        if (!this.dangerScreenOverlay || this.dangerScreenActive) return;
+        this.dangerScreenOverlay.setVisible(false);
+        this.dangerScreenOverlay.setScale(1);
+      }
+    });
+  }
+
+  /**
+   * Update danger-screen visibility based on current selection.
+   * @param {number | null} dangerTargetIndex - Local target index when danger should be visible.
+   */
+  updateDangerScreenEffect(dangerTargetIndex) {
+    this.updateDangerScreenOverlayLayout(this.getLayout());
+    if (Number.isInteger(dangerTargetIndex)) {
+      this.showDangerScreenOverlay();
+      return;
+    }
+    this.hideDangerScreenOverlay();
+  }
+
   // ==========================================================================
   // PRELOAD
   // ==========================================================================
@@ -230,6 +395,7 @@ export class GameScene extends Phaser.Scene {
     this.load.image('bg', ASSETS.BG);
     this.load.image('gun', ASSETS.GUN);
     this.load.image('crossedRevolvers', ASSETS.CROSSED_REVOLVERS);
+    this.load.image('revolverImpact', ASSETS.REVOLVER_IMPACT);
 
     this.load.image(AVATAR_KEYS.PLAYER, ASSETS.AVATAR_PLAYER);
     this.load.image(AVATAR_KEYS.PLAYER_ACTIVE, ASSETS.AVATAR_PLAYER_ACTIVE);
@@ -346,6 +512,7 @@ export class GameScene extends Phaser.Scene {
     this.bgShade = this.add.rectangle(layout.CENTER_X, layout.HEIGHT / 2, layout.WIDTH, layout.HEIGHT, 0x000000, 0.25);
     this.applyBackgroundCover(layout.WIDTH, layout.HEIGHT);
     this.registerResizeHandler();
+    this.setupDangerScreenOverlay();
 
     this.hud.setup();
 
@@ -416,6 +583,7 @@ export class GameScene extends Phaser.Scene {
       const width = gameSize?.width || this.scale.width;
       const height = gameSize?.height || this.scale.height;
       this.applyBackgroundCover(width, height);
+      this.updateDangerScreenOverlayLayout(getLayout(this));
     };
 
     this.scale.on('resize', this.resizeHandler, this);
@@ -424,6 +592,9 @@ export class GameScene extends Phaser.Scene {
         this.scale.off('resize', this.resizeHandler, this);
         this.resizeHandler = null;
       }
+      this.clearDangerScreenPulseTween();
+      this.dangerScreenOverlay = null;
+      this.dangerScreenActive = false;
     });
   }
 
@@ -594,6 +765,7 @@ export class GameScene extends Phaser.Scene {
         turnNumber: game.turnNumber,
         turnStartedAt: game.turnStartedAt?.seconds || game.turnStartedAt || null,
         revealedRound: game.turnContext?.revealedRound || null,
+        targetPlayerId: game.turnContext?.targetPlayerId || null,
         shotgun: {
           chamberLength: game.shotgun?.chamber?.length || 0,
           totalRounds: game.shotgun?.totalRounds || 0,
@@ -1111,10 +1283,16 @@ export class GameScene extends Phaser.Scene {
         : (action.targetId === myUserId ? localIndex : (fallbackOpponentIndex >= 0 ? fallbackOpponentIndex : localIndex));
       const shotType = resolvedTargetIndex === resolvedActorIndex ? 'SHOOT_SELF' : 'SHOOT_PLAYER';
       const wasLive = result.roundType === 'live';
+      const shouldShowGunImpact = resolvedTargetIndex === localIndex;
 
       this.action.showActionIndicator(actorId, shotType);
       this.gun.rotateToTarget(resolvedTargetIndex, () => {
         this.effects.playShootEffect(wasLive, { type: shotType });
+        this.effects.playGunImpactEffect({
+          targetIndex: resolvedTargetIndex,
+          wasLive,
+          shouldDisplay: shouldShowGunImpact
+        });
         this.sound.play(wasLive ? 'sndGunshot' : 'sndDryFire');
 
         if (wasLive && (result.damage || 0) > 0) {
@@ -1155,7 +1333,7 @@ export class GameScene extends Phaser.Scene {
         roundAfter: result.roundAfter,
         gameEnded: !!result.gameEnded
       });
-      return 680;
+      return 1000;
     }
 
     if (action.type === 'item_use') {
@@ -1237,6 +1415,7 @@ export class GameScene extends Phaser.Scene {
       logger.debug('handcuff_target_selected', { userId: resolvedUserId, index });
       this.targetedIndex = index;
       this.selectedTargetId = resolvedUserId;
+      this.syncTurnTargetSelection(resolvedUserId, 'item');
       this.pendingMultiplayerItemSelection = null;
       this.isProcessing = true;
       this.updateButtonStates();
@@ -1258,6 +1437,7 @@ export class GameScene extends Phaser.Scene {
       this.targetedIndex = index;
       this.selectedTargetId = resolvedUserId;
     }
+    this.syncTurnTargetSelection(this.selectedTargetId || null, this.selectedTargetId ? 'shoot' : null);
 
     this.render();
     this.updateButtonStates();
@@ -1328,6 +1508,98 @@ export class GameScene extends Phaser.Scene {
     this.selectedTargetId = null;
   }
 
+  /**
+   * Sync selected target in shared turn context for multiplayer visibility.
+   * @param {string | null} targetUserId - Selected target user id.
+   * @param {'shoot' | 'item' | null} targetMode - Selection mode.
+   */
+  syncTurnTargetSelection(targetUserId = null, targetMode = null) {
+    if (!this.isMultiplayer || !this.gameStore?.setTurnTarget) return;
+
+    void this.gameStore.setTurnTarget(targetUserId || null, targetMode || null).catch((err) => {
+      logger.debug('turn_target_sync_failed', {
+        targetId: targetUserId || null,
+        targetMode: targetMode || null,
+        error: err?.message || String(err)
+      });
+    });
+  }
+
+  /**
+   * Get turn target from authoritative multiplayer state.
+   * @returns {string | null}
+   */
+  getSyncedTurnTargetId() {
+    if (!this.isMultiplayer) return null;
+    return this.gameStore?.currentGame?.turnContext?.targetPlayerId || null;
+  }
+
+  /**
+   * Get turn target mode from authoritative multiplayer state.
+   * @returns {'shoot' | 'item' | null}
+   */
+  getSyncedTurnTargetMode() {
+    if (!this.isMultiplayer) return null;
+    const mode = this.gameStore?.currentGame?.turnContext?.targetMode;
+    return mode === 'shoot' || mode === 'item' ? mode : null;
+  }
+
+  /**
+   * Resolve local mapped player index from target user id.
+   * @param {string | null} targetUserId - Target user id.
+   * @returns {number | null}
+   */
+  resolveTargetIndexFromUserId(targetUserId) {
+    if (!targetUserId || !this.state?.players?.length) return null;
+
+    const index = this.state.players.findIndex(player =>
+      player.alive && (player.userId === targetUserId || player.id === targetUserId)
+    );
+    return index >= 0 ? index : null;
+  }
+
+  /**
+   * Resolve which target highlight should be rendered.
+   * Local interactive selection has priority; otherwise use synchronized turn target.
+   * @returns {number | null}
+   */
+  resolveDisplayedTargetIndex() {
+    const localTargetId = this.canSelectTarget() ? (this.selectedTargetId || null) : null;
+    const targetId = localTargetId || this.getSyncedTurnTargetId();
+    return this.resolveTargetIndexFromUserId(targetId);
+  }
+
+  /**
+   * Resolve which target should receive danger overlay.
+   * Overlay is restricted to shoot targeting mode only.
+   * @returns {number | null}
+   */
+  resolveDangerTargetIndex() {
+    if (!this.state?.players?.length) return null;
+
+    const myUserId = this.getMyUserId();
+    if (!myUserId) return null;
+
+    const hasLocalSelection = this.canSelectTarget() && !!this.selectedTargetId;
+    const localMode = hasLocalSelection
+      ? (this.isAwaitingHandcuffTargetSelection() ? 'item' : 'shoot')
+      : null;
+    const localTargetId = hasLocalSelection ? this.selectedTargetId : null;
+
+    const syncedTargetId = this.getSyncedTurnTargetId();
+    const syncedMode = this.getSyncedTurnTargetMode();
+
+    const effectiveMode = localMode || syncedMode;
+    const effectiveTargetId = localTargetId || syncedTargetId;
+    const actorUserId = this.getTurnActorUserId();
+
+    if (effectiveMode !== 'shoot') return null;
+    if (!effectiveTargetId || effectiveTargetId !== myUserId) return null;
+    if (!actorUserId || actorUserId === myUserId) return null;
+
+    return this.resolveTargetIndexFromUserId(effectiveTargetId);
+  }
+
   // ==========================================================================
   // PLAYER INPUT
   // ==========================================================================
@@ -1354,6 +1626,7 @@ export class GameScene extends Phaser.Scene {
 
     if (this.isMultiplayer && actionData.type?.startsWith('SHOOT')) {
       this.clearTargetSelection();
+      this.syncTurnTargetSelection(null, null);
       this.updateButtonStates();
     }
 
@@ -1382,6 +1655,7 @@ export class GameScene extends Phaser.Scene {
       this.pendingMultiplayerItemSelection = nextMode;
       if (nextMode) {
         this.clearTargetSelection();
+        this.syncTurnTargetSelection(null, null);
       }
 
       logger.debug('handcuff_target_selection_mode', { active: !!nextMode });
@@ -1532,11 +1806,12 @@ export class GameScene extends Phaser.Scene {
       this.pendingMultiplayerItemSelection = null;
     }
 
-    if (this.isMultiplayer && this.selectedTargetId) {
-      const selectedExists = this.state.players.some(
-        player => player.alive && (player.userId === this.selectedTargetId || player.id === this.selectedTargetId)
+    if (this.isMultiplayer) {
+      const hasAliveTarget = (targetId) => this.state.players.some(
+        player => player.alive && (player.userId === targetId || player.id === targetId)
       );
-      if (!selectedExists) {
+
+      if (this.selectedTargetId && !hasAliveTarget(this.selectedTargetId)) {
         this.clearTargetSelection();
       }
     }
@@ -1549,7 +1824,10 @@ export class GameScene extends Phaser.Scene {
       this.gun.resetKnifeVisuals();
     }
 
-    this.players.updateAvatarStates(this.state, this.targetedIndex);
+    const displayedTargetIndex = this.resolveDisplayedTargetIndex();
+    const dangerTargetIndex = this.resolveDangerTargetIndex();
+    this.updateDangerScreenEffect(dangerTargetIndex);
+    this.players.updateAvatarStates(this.state, displayedTargetIndex, null);
     this.players.renderHearts(this.state);
     this.hud.update(this.state);
     this.ammo.render(

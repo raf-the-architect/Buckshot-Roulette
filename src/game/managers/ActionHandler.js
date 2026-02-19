@@ -8,6 +8,7 @@ import { ITEM_ASSET_MAP, SCALE } from "../LayoutConfig.js";
 import { createLogger } from "@/utils/logger";
 
 const logger = createLogger("ActionHandler");
+const SHOT_RECOVERY_DELAY_MS = 1020;
 
 export class ActionHandler {
     constructor(scene) {
@@ -226,6 +227,11 @@ export class ActionHandler {
                 this.scene.sound.play("sndDryFire");
             }
             this.scene.effects.playShootEffect(wasLive, normalizedAction);
+            this.scene.effects.playGunImpactEffect({
+                targetIndex,
+                wasLive,
+                shouldDisplay: true
+            });
 
             const crossedRevolvers = this.scene.gun.getCrossedRevolversSprite();
             const gunSprite = this.scene.gun.getGunSprite();
@@ -281,7 +287,7 @@ export class ActionHandler {
         if (normalizedAction.type.startsWith("SHOOT")) {
             this.scene.targetedIndex = null;
             this.scene.isProcessing = true;
-            this.scene.time.delayedCall(700, () => {
+            this.scene.time.delayedCall(SHOT_RECOVERY_DELAY_MS, () => {
                 this.scene.isProcessing = false;
 
                 this.scene.gun.resetToNeutral();

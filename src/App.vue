@@ -45,7 +45,7 @@
 
     <button
       v-if="currentScreen === 'game'"
-      class="in-game-settings-btn"
+      class="in-game-settings-btn bb-btn bb-btn--secondary bb-btn--sm"
       type="button"
       aria-label="Open game settings"
       @click="showInGameSettings = true"
@@ -208,7 +208,7 @@ function rememberActiveRoom(roomCode) {
 
 function clearActiveRoom() {
   localStorage.removeItem(ACTIVE_ROOM_STORAGE_KEY);
-  pendingJoinCode.value = normalizeRoomCode(route.params.code);
+  pendingJoinCode.value = '';
 }
 
 function migrateLegacyLocalState() {
@@ -305,8 +305,7 @@ const showStartSyncOverlay = computed(() =>
 const canLeaveCurrentMatch = computed(() =>
   isMultiplayer.value &&
   currentScreen.value === 'game' &&
-  gameStore.isActive &&
-  !!gameStore.amAlive
+  gameStore.isActive
 );
 
 const countdownRemaining = computed(() => {
@@ -614,8 +613,8 @@ async function onLeaveLobby() {
 }
 
 /**
- * Leave current active match without stopping the game for others.
- * Marks local player as eliminated and keeps match running.
+ * Leave current active match and return to menu.
+ * Best-effort marks local player as eliminated first, then exits room and clears resume state.
  */
 async function onLeaveCurrentMatch() {
   if (!canLeaveCurrentMatch.value) {
@@ -623,13 +622,37 @@ async function onLeaveCurrentMatch() {
     return;
   }
 
+  const exitErrors = [];
+
   try {
-    await gameStore.leaveMatchAsDead();
-  } catch (err) {
-    logger.error('leave_current_match_failed', { error: err.message });
-    alert('Failed to leave current match: ' + err.message);
+    if (gameStore.amAlive) {
+      try {
+        await gameStore.leaveMatchAsDead();
+      } catch (err) {
+        logger.warn('leave_current_match_mark_dead_failed', { error: err.message });
+      }
+    }
+
+    destroyPhaser();
+    gameStore.leaveGame();
+
+    try {
+      await roomStore.leaveRoom();
+    } catch (err) {
+      exitErrors.push(err);
+      logger.error('leave_current_match_leave_room_failed', { error: err.message });
+    }
+
+    clearActiveRoom();
+    await ensureHomeRoute();
+    isMultiplayer.value = false;
+    currentScreen.value = 'start';
   } finally {
     showInGameSettings.value = false;
+  }
+
+  if (exitErrors.length > 0) {
+    alert('Failed to fully leave room on server. You were returned to menu.');
   }
 }
 
@@ -935,24 +958,16 @@ watch(() => currentScreen.value, (screen) => {
 
 .in-game-settings-btn {
   position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + 0.7rem);
   left: calc(env(safe-area-inset-left, 0px) + 0.7rem);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 0.7rem);
   width: 46px;
   height: 46px;
-  border-radius: 12px;
-  border: 2px solid rgba(67, 118, 178, 0.46);
-  background: linear-gradient(180deg, rgba(254, 243, 216, 0.96) 0%, rgba(240, 220, 171, 0.96) 100%);
-  color: var(--bb-blue-900);
-  box-shadow: 0 8px 16px rgba(21, 57, 103, 0.34);
-  display: grid;
-  place-items: center;
+  min-height: 46px;
+  padding: 0;
+  border-radius: var(--bb-radius-pill);
   font-size: 1.32rem;
-  cursor: pointer;
+  line-height: 1;
   z-index: 18;
-}
-
-.in-game-settings-btn:active {
-  transform: translateY(1px);
 }
 
 .hidden {
@@ -1060,8 +1075,9 @@ watch(() => currentScreen.value, (screen) => {
   .in-game-settings-btn {
     width: 42px;
     height: 42px;
-    border-radius: 10px;
+    min-height: 42px;
     font-size: 1.18rem;
+    border-radius: 30px;
   }
 
   .loading-card {

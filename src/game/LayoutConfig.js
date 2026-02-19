@@ -13,6 +13,7 @@ export const ASSETS = {
     BG: "images/background.png",
     GUN: "images/gun.png",
     CROSSED_REVOLVERS: "images/crossed-revolvers.png",
+    REVOLVER_IMPACT: "images/effects/revolver-aimed-at-viewer.png",
 
     // Avatars
     AVATAR_PLAYER: "images/avatars/avatar-player.png",
