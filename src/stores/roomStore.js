@@ -271,12 +271,9 @@ export const useRoomStore = defineStore('room', () => {
                 !!existingEntry ||
                 roomPlayerIds.includes(authStore.userId);
 
-            // Allow reconnect/rejoin for existing room members even while game is already playing.
+            // Allow reconnect/rejoin for existing room members even while game is already
+            // playing or between matches after it ended.
             if (isExistingPlayer) {
-                if (roomData.status === ROOM_STATUS.ENDED) {
-                    throw new Error('Game has ended');
-                }
-
                 const updatedPlayerList = [...roomPlayerList];
                 const isHostPlayer = roomData.hostId === authStore.userId;
 

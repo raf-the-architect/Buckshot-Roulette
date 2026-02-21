@@ -50,7 +50,7 @@
       aria-label="Open game settings"
       @click="showInGameSettings = true"
     >
-      ⚙
+      <span class="in-game-settings-icon" aria-hidden="true">⚙</span>
     </button>
 
     <SettingsModal
@@ -618,6 +618,52 @@ async function waitForGameReady(roomId, timeoutMs = 10000) {
 }
 
 /**
+ * Return true when local UI should auto-enter an active multiplayer match.
+ */
+function shouldAutoBootMultiplayerMatch() {
+  if (!isMultiplayer.value) return false;
+  if (isBootingMultiplayerGame.value) return false;
+
+  const screen = currentScreen.value;
+  if (screen !== 'lobby' && screen !== 'replay') return false;
+
+  const roomId = roomStore.roomId;
+  if (!roomId) return false;
+
+  const roomStatus = roomStore.currentRoom?.status;
+  const roomIsPlaying = roomStatus === ROOM_STATUS.PLAYING;
+  const game = gameStore.currentGame;
+  const hasGameForRoom =
+    !!game &&
+    (game.roomId === roomId || game.gameId === roomId);
+
+  // If we already have a game snapshot for this room, trust that snapshot over room status.
+  if (hasGameForRoom) {
+    return game.status === 'active' && !!game.matchId;
+  }
+
+  return roomIsPlaying;
+}
+
+/**
+ * Best-effort auto boot for replay/lobby timing races.
+ */
+function maybeBootActiveMultiplayerMatch(trigger) {
+  if (!shouldAutoBootMultiplayerMatch()) return;
+
+  logger.info('auto_boot_multiplayer_match', {
+    trigger,
+    roomId: roomStore.roomId,
+    screen: currentScreen.value,
+    roomStatus: roomStore.currentRoom?.status || null,
+    gameStatus: gameStore.currentGame?.status || null,
+    matchId: gameStore.currentGame?.matchId || null
+  });
+
+  void onGameStarted();
+}
+
+/**
  * Leave lobby
  */
 async function onLeaveLobby() {
@@ -892,17 +938,25 @@ watch(showStartSyncOverlay, (visible) => {
 
 // Watch for room status to start game (for clients and host sync)
 watch(() => roomStore.currentRoom?.status, (status) => {
-  if (status === ROOM_STATUS.PLAYING && currentScreen.value === 'lobby') {
+  if (status === ROOM_STATUS.PLAYING) {
     logger.info('room_status_playing', { roomId: roomStore.roomId });
-    onGameStarted();
   }
+  maybeBootActiveMultiplayerMatch('room_status_change');
 });
 
 watch(() => currentScreen.value, (screen) => {
   if (screen !== 'game') {
     showInGameSettings.value = false;
   }
+  maybeBootActiveMultiplayerMatch('screen_change');
 });
+
+watch(
+  () => `${gameStore.currentGame?.status || ''}:${gameStore.currentGame?.matchId || ''}`,
+  () => {
+    maybeBootActiveMultiplayerMatch('game_snapshot_change');
+  }
+);
 </script>
 
 <style>
@@ -999,6 +1053,30 @@ watch(() => currentScreen.value, (screen) => {
   font-size: 2rem;
   line-height: 1;
   z-index: 40;
+  overflow: visible;
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  text-shadow: none;
+}
+
+.in-game-settings-btn::before {
+  display: none;
+}
+
+.in-game-settings-btn:hover:not(:disabled),
+.in-game-settings-btn:active:not(:disabled),
+.in-game-settings-btn.is-pressed {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.in-game-settings-icon {
+  display: block;
+  line-height: 1;
+  transform: scale(3);
+  transform-origin: center;
 }
 
 .hidden {
