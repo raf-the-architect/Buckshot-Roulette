@@ -8,7 +8,7 @@ import { ITEM_ASSET_MAP, SCALE } from "../LayoutConfig.js";
 import { createLogger } from "@/utils/logger";
 
 const logger = createLogger("ActionHandler");
-const SHOT_RECOVERY_DELAY_MS = 1020;
+const SHOT_RECOVERY_DELAY_MS = 1320;
 
 export class ActionHandler {
     constructor(scene) {
@@ -113,7 +113,17 @@ export class ActionHandler {
             this.scene.targetedIndex = (actorId === "YOU" ? 0 : 1);
         }
 
-        this.scene.players.updateAvatarStates(this.scene.state, this.scene.targetedIndex);
+        if (isShot) {
+            const lockTargetIndex = this.resolveTargetIndex(action, actorId);
+            const targetPlayer = this.scene.state.players[lockTargetIndex];
+            const targetUserId = targetPlayer?.userId || targetPlayer?.id || null;
+            const actorIndex = actorId === "YOU" ? 0 : 1;
+            const actorPlayer = this.scene.state.players[actorIndex];
+            const actorUserId = actorPlayer?.userId || actorPlayer?.id || null;
+            this.scene.lockTargetForAction?.(targetUserId, "shoot", actorUserId);
+        }
+
+        this.scene.players.updateAvatarStates(this.scene.state, this.scene.targetedIndex, null);
 
         if (isShot) {
             this.scene.isProcessing = true;
@@ -285,13 +295,16 @@ export class ActionHandler {
         this.scene.render();
 
         if (normalizedAction.type.startsWith("SHOOT")) {
-            this.scene.targetedIndex = null;
             this.scene.isProcessing = true;
             this.scene.time.delayedCall(SHOT_RECOVERY_DELAY_MS, () => {
+                this.scene.targetedIndex = null;
+                this.scene.clearTargetSelection?.();
+                this.scene.clearLockedTarget?.();
                 this.scene.isProcessing = false;
 
                 this.scene.gun.resetToNeutral();
                 this.scene.ai.checkTurn();
+                this.scene.updateButtonStates();
                 this.scene.players.updateAvatarStates(this.scene.state);
             });
         } else {

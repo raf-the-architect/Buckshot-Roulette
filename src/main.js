@@ -21,6 +21,11 @@ const routes = [
         component: App
     },
     {
+        path: '/offline',
+        name: 'Offline',
+        component: App
+    },
+    {
         path: '/join/:code',
         name: 'Join',
         component: App

@@ -28,6 +28,8 @@ const logger = createLogger('GameStore');
 const START_COUNTDOWN_SECONDS = 3;
 const ACTION_QUERY_LIMIT = 100;
 const generateMatchId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`;
+const SHOTGUN_TOTAL_MIN = 4;
+const SHOTGUN_TOTAL_MAX = 9;
 
 /**
  * Convert Firestore timestamp-like values to milliseconds.
@@ -65,6 +67,34 @@ const calculateInitialHealth = (playerCount) => {
     if (playerCount <= 2) return 4;
     if (playerCount <= 4) return 4;
     return 3;
+};
+
+/**
+ * Random integer in inclusive range.
+ * @param {number} min - Minimum value.
+ * @param {number} max - Maximum value.
+ * @param {() => number} randomFn - RNG source returning [0, 1).
+ * @returns {number}
+ */
+const randomIntInclusive = (min, max, randomFn = Math.random) => {
+    if (max <= min) return min;
+    return Math.floor(randomFn() * (max - min + 1)) + min;
+};
+
+/**
+ * Resolve a randomized shotgun profile for a given round.
+ * Always includes at least one live and one blank round.
+ * @param {number} roundNumber - Round number.
+ * @param {() => number} randomFn - RNG source returning [0, 1).
+ * @returns {{liveRounds: number, blankRounds: number}}
+ */
+const rollShotgunProfile = (roundNumber = 1, randomFn = Math.random) => {
+    const normalizedRound = Math.max(1, Number(roundNumber) || 1);
+    const maxTotal = Math.min(SHOTGUN_TOTAL_MAX, SHOTGUN_TOTAL_MIN + 2 + normalizedRound);
+    const totalRounds = randomIntInclusive(SHOTGUN_TOTAL_MIN, maxTotal, randomFn);
+    const liveRounds = randomIntInclusive(1, totalRounds - 1, randomFn);
+    const blankRounds = totalRounds - liveRounds;
+    return { liveRounds, blankRounds };
 };
 
 /**
@@ -499,9 +529,8 @@ export const useGameStore = defineStore('game', () => {
      * @returns {object}
      */
     const buildShotgunForRound = (nextRound) => {
-        const liveCount = Math.min(nextRound + 1, 4);
-        const blankCount = Math.min(nextRound + 2, 5);
-        return generateShotgun(liveCount, blankCount);
+        const { liveRounds, blankRounds } = rollShotgunProfile(nextRound);
+        return generateShotgun(liveRounds, blankRounds);
     };
 
     // =========================================================================
@@ -545,7 +574,7 @@ export const useGameStore = defineStore('game', () => {
 
             // Round 1 starts with no items for all players.
             const players = basePlayers;
-            const shotgun = generateShotgun(2, 4);
+            const shotgun = buildShotgunForRound(1);
             const matchId = generateMatchId();
 
             const gameData = {

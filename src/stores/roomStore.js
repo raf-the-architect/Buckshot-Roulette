@@ -52,8 +52,7 @@ export const useRoomStore = defineStore('room', () => {
     const canStart = computed(() => {
         return isHost.value &&
             roomPlayers.value.length >= MIN_PLAYERS &&
-            roomPlayers.value.length <= (currentRoom.value?.maxPlayers || MAX_PLAYERS) &&
-            roomPlayers.value.every(p => p.isReady);
+            roomPlayers.value.length <= (currentRoom.value?.maxPlayers || MAX_PLAYERS);
     });
 
     const playerCount = computed(() => roomPlayers.value.length);
@@ -210,7 +209,6 @@ export const useRoomStore = defineStore('room', () => {
                     userId: authStore.userId,
                     displayName: authStore.displayName,
                     isHost: true,
-                    isReady: true,
                     slotIndex: 0,
                     joinedAt: new Date().toISOString()
                 }]
@@ -224,7 +222,6 @@ export const useRoomStore = defineStore('room', () => {
                 userId: authStore.userId,
                 displayName: authStore.displayName,
                 isHost: true,
-                isReady: true,
                 slotIndex: 0,
                 joinedAt: serverTimestamp(),
                 lastPing: serverTimestamp(),
@@ -298,7 +295,6 @@ export const useRoomStore = defineStore('room', () => {
                     userId: authStore.userId,
                     displayName: authStore.displayName,
                     isHost: isHostPlayer,
-                    isReady: true,
                     slotIndex,
                     joinedAt
                 };
@@ -322,7 +318,6 @@ export const useRoomStore = defineStore('room', () => {
                     userId: authStore.userId,
                     displayName: authStore.displayName,
                     isHost: isHostPlayer,
-                    isReady: true,
                     slotIndex,
                     joinedAt: playerSnap.data()?.joinedAt || serverTimestamp(),
                     lastPing: serverTimestamp(),
@@ -371,7 +366,6 @@ export const useRoomStore = defineStore('room', () => {
                 userId: authStore.userId,
                 displayName: authStore.displayName,
                 isHost: false,
-                isReady: true,
                 slotIndex,
                 joinedAt: new Date().toISOString()
             }];
@@ -388,7 +382,6 @@ export const useRoomStore = defineStore('room', () => {
                 userId: authStore.userId,
                 displayName: authStore.displayName,
                 isHost: false,
-                isReady: true,
                 slotIndex,
                 joinedAt: serverTimestamp(),
                 lastPing: serverTimestamp(),
@@ -447,37 +440,6 @@ export const useRoomStore = defineStore('room', () => {
 
         startPresenceClock();
         startPresenceHeartbeat(roomId);
-    };
-
-    /**
-     * Set player ready state
-     * @param {boolean} isReady - Ready state
-     */
-    const setReady = async (isReady) => {
-        const authStore = useAuthStore();
-        const roomIdVal = currentRoom.value?.roomId;
-
-        if (!roomIdVal) return;
-
-        try {
-            // Update player in subcollection
-            await updateDoc(doc(db, 'rooms', roomIdVal, 'players', authStore.userId), {
-                isReady
-            });
-
-            // Update playerList in room document
-            const updatedList = currentRoom.value.playerList.map(p =>
-                p.userId === authStore.userId ? { ...p, isReady } : p
-            );
-
-            await updateDoc(doc(db, 'rooms', roomIdVal), {
-                playerList: updatedList,
-                updatedAt: serverTimestamp()
-            });
-        } catch (err) {
-            logger.error('set_ready_failed', { isReady, error: err.message });
-            throw err;
-        }
     };
 
     /**
@@ -603,7 +565,6 @@ export const useRoomStore = defineStore('room', () => {
         createRoom,
         joinRoom,
         subscribeToRoom,
-        setReady,
         leaveRoom,
         kickPlayer,
         unsubscribeFromRoom

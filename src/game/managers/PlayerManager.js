@@ -59,10 +59,10 @@ export class PlayerManager {
         const cx = size / 2;
         const cy = size / 2;
         const radial = ctx.createRadialGradient(cx, cy, size * 0.12, cx, cy, size * 0.64);
-        radial.addColorStop(0, "rgba(22,0,0,0)");
-        radial.addColorStop(0.48, "rgba(86,0,0,0.2)");
-        radial.addColorStop(0.74, "rgba(128,0,0,0.56)");
-        radial.addColorStop(1, "rgba(76,0,0,0.95)");
+        radial.addColorStop(0, "rgba(20,0,0,0)");
+        radial.addColorStop(0.36, "rgba(92,0,0,0.28)");
+        radial.addColorStop(0.66, "rgba(156,0,0,0.66)");
+        radial.addColorStop(1, "rgba(88,0,0,0.96)");
         ctx.fillStyle = radial;
         ctx.fillRect(0, 0, size, size);
 
@@ -130,16 +130,16 @@ export class PlayerManager {
 
         this.scene.tweens.add({
             targets: pc.dangerOverlay,
-            alpha: 0.82,
+            alpha: 0.9,
             duration: 180,
             ease: "Cubic.easeOut",
             onComplete: () => {
                 if (!pc.isDangerActive || !pc.dangerOverlay) return;
                 pc.dangerPulseTween = this.scene.tweens.add({
                     targets: pc.dangerOverlay,
-                    alpha: { from: 0.72, to: 0.88 },
-                    scale: { from: 1, to: 1.03 },
-                    duration: 620,
+                    alpha: { from: 0.78, to: 0.96 },
+                    scale: { from: 1, to: 1.07 },
+                    duration: 430,
                     ease: "Sine.easeInOut",
                     yoyo: true,
                     repeat: -1
@@ -765,9 +765,53 @@ export class PlayerManager {
                 pc.avatar.setAlpha(0.6);
                 pc.avatar.setScale(baseScale);
                 pc.glowRing.setAlpha(0);
+                pc.glowRing.setFillStyle(0x4a90d9, 1);
+            } else if (isDangerTarget) {
+                pc.avatar.clearTint();
+                pc.avatar.setTint(0xff8d8d);
+                pc.avatar.setAlpha(1);
+                pc.glowRing.setFillStyle(0xa10f16, 1);
+                pc.glowRing.setAlpha(0.6);
+
+                this.scene.tweens.add({
+                    targets: pc.glowRing,
+                    alpha: { from: 0.32, to: 0.76 },
+                    scale: { from: 1.02, to: 1.14 },
+                    duration: 360,
+                    yoyo: true,
+                    repeat: -1
+                });
+                this.scene.tweens.add({
+                    targets: pc.avatar,
+                    scale: { from: baseScale * 1.02, to: baseScale * 1.1 },
+                    duration: 320,
+                    yoyo: true,
+                    repeat: -1
+                });
+            } else if (isTargeted) {
+                pc.avatar.clearTint();
+                pc.avatar.setTint(0xffb5b5);
+                pc.avatar.setAlpha(1);
+                pc.glowRing.setFillStyle(0x8f1b20, 1);
+                pc.glowRing.setAlpha(0.32);
+
+                this.scene.tweens.add({
+                    targets: pc.glowRing,
+                    alpha: { from: 0.2, to: 0.46 },
+                    scale: { from: 1.01, to: 1.09 },
+                    duration: 520,
+                    yoyo: true,
+                    repeat: -1
+                });
+                this.scene.tweens.add({
+                    targets: pc.avatar,
+                    scale: baseScale * 1.07,
+                    duration: 280
+                });
             } else if (isCurrentTurn) {
                 pc.avatar.clearTint();
                 pc.avatar.setAlpha(1);
+                pc.glowRing.setFillStyle(0x4a90d9, 1);
                 pc.glowRing.setAlpha(0.4);
 
                 this.scene.tweens.add({
@@ -787,6 +831,7 @@ export class PlayerManager {
                 pc.avatar.clearTint();
                 pc.avatar.setAlpha(0.8);
                 pc.glowRing.setAlpha(0);
+                pc.glowRing.setFillStyle(0x4a90d9, 1);
                 pc.avatar.setScale(baseScale);
             }
 

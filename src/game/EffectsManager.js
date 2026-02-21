@@ -7,15 +7,21 @@ import { ITEM_ASSET_MAP } from "./LayoutConfig.js";
 import { ITEM_KEYS } from "./gameLogic.js";
 
 const GUN_IMPACT_DEPTH = 90;
-const GUN_IMPACT_ENTRY_MS = 180;
-const GUN_IMPACT_HOLD_MS = 620;
-const GUN_IMPACT_EXIT_MS = 200;
-const GUN_IMPACT_TOTAL_MS = GUN_IMPACT_ENTRY_MS + GUN_IMPACT_HOLD_MS + GUN_IMPACT_EXIT_MS;
+const GUN_IMPACT_ANTICIPATION_MS = 140;
+const GUN_IMPACT_LUNGE_MS = 200;
+const GUN_IMPACT_HOLD_MS = 760;
+const GUN_IMPACT_EXIT_MS = 260;
+const GUN_IMPACT_TOTAL_MS =
+    GUN_IMPACT_ANTICIPATION_MS +
+    GUN_IMPACT_LUNGE_MS +
+    GUN_IMPACT_HOLD_MS +
+    GUN_IMPACT_EXIT_MS;
 
 export class EffectsManager {
     constructor(scene) {
         this.scene = scene;
         this.gunImpactSprite = null;
+        this.gunImpactWash = null;
     }
 
     /**
@@ -112,10 +118,16 @@ export class EffectsManager {
      * Destroy any active gun-impact sprite and stop tweens.
      */
     clearGunImpactEffect() {
-        if (!this.gunImpactSprite) return;
-        this.scene.tweens.killTweensOf(this.gunImpactSprite);
-        this.gunImpactSprite.destroy();
-        this.gunImpactSprite = null;
+        if (this.gunImpactSprite) {
+            this.scene.tweens.killTweensOf(this.gunImpactSprite);
+            this.gunImpactSprite.destroy();
+            this.gunImpactSprite = null;
+        }
+        if (this.gunImpactWash) {
+            this.scene.tweens.killTweensOf(this.gunImpactWash);
+            this.gunImpactWash.destroy();
+            this.gunImpactWash = null;
+        }
     }
 
     /**
@@ -161,7 +173,19 @@ export class EffectsManager {
 
         const finalScaleX = impact.scaleX;
         const finalScaleY = impact.scaleY;
-        impact.setScale(finalScaleX * 0.85, finalScaleY * 0.85);
+        impact.setScale(finalScaleX * 0.68, finalScaleY * 0.68);
+        impact.setY(impactY + 26);
+        impact.setAngle(0);
+
+        const threatWash = this.scene.add.rectangle(
+            layout.CENTER_X,
+            layout.HEIGHT / 2,
+            layout.WIDTH,
+            layout.HEIGHT,
+            wasLive ? 0x720707 : 0x2f1a1a,
+            wasLive ? 0.26 : 0.12
+        ).setDepth(GUN_IMPACT_DEPTH - 1);
+        this.gunImpactWash = threatWash;
 
         if (this.scene.cache?.audio?.exists?.("sndGunImpactHit")) {
             try {
@@ -172,36 +196,89 @@ export class EffectsManager {
         }
 
         this.triggerEffect("shake", {
-            duration: wasLive ? 130 : 90,
-            intensity: wasLive ? 0.007 : 0.0035
+            duration: wasLive ? 170 : 120,
+            intensity: wasLive ? 0.0105 : 0.0045
+        });
+        this.triggerEffect("flash", {
+            color: wasLive ? 0x8f0a0a : 0x2f1a1a,
+            alpha: wasLive ? 0.28 : 0.14,
+            duration: 220
         });
 
         this.scene.tweens.add({
             targets: impact,
-            alpha: 1,
-            scaleX: finalScaleX,
-            scaleY: finalScaleY,
-            duration: GUN_IMPACT_ENTRY_MS,
-            ease: "Back.easeOut",
+            alpha: 0.62,
+            scaleX: finalScaleX * 0.8,
+            scaleY: finalScaleY * 0.8,
+            y: impactY + 10,
+            duration: GUN_IMPACT_ANTICIPATION_MS,
+            ease: "Quad.easeOut",
             onComplete: () => {
-                this.scene.time.delayedCall(GUN_IMPACT_HOLD_MS, () => {
-                    if (!this.gunImpactSprite || this.gunImpactSprite !== impact) return;
+                if (!this.gunImpactSprite || this.gunImpactSprite !== impact) return;
+                this.scene.tweens.add({
+                    targets: impact,
+                    alpha: 1,
+                    scaleX: finalScaleX,
+                    scaleY: finalScaleY,
+                    y: impactY - (wasLive ? 6 : 2),
+                    duration: GUN_IMPACT_LUNGE_MS,
+                    ease: "Cubic.easeOut",
+                    onComplete: () => {
+                        if (!this.gunImpactSprite || this.gunImpactSprite !== impact) return;
 
-                    this.scene.tweens.add({
-                        targets: impact,
-                        alpha: 0,
-                        scaleX: finalScaleX * 0.92,
-                        scaleY: finalScaleY * 0.92,
-                        y: impactY + 10,
-                        duration: GUN_IMPACT_EXIT_MS,
-                        ease: "Cubic.easeIn",
-                        onComplete: () => {
-                            if (this.gunImpactSprite === impact) {
-                                this.clearGunImpactEffect();
-                            }
-                        }
-                    });
+                        const jitterTween = this.scene.tweens.add({
+                            targets: impact,
+                            x: {
+                                from: layout.CENTER_X - (wasLive ? 5 : 3),
+                                to: layout.CENTER_X + (wasLive ? 5 : 3)
+                            },
+                            y: {
+                                from: impactY - (wasLive ? 8 : 3),
+                                to: impactY - (wasLive ? 2 : 0)
+                            },
+                            angle: { from: wasLive ? -1.4 : -0.7, to: wasLive ? 1.4 : 0.7 },
+                            duration: 52,
+                            yoyo: true,
+                            repeat: -1
+                        });
+
+                        this.scene.time.delayedCall(GUN_IMPACT_HOLD_MS, () => {
+                            if (!this.gunImpactSprite || this.gunImpactSprite !== impact) return;
+                            jitterTween.stop();
+                            jitterTween.remove();
+                            impact.setPosition(layout.CENTER_X, impactY - 2);
+                            impact.setAngle(0);
+
+                            this.scene.tweens.add({
+                                targets: impact,
+                                alpha: 0,
+                                scaleX: finalScaleX * 0.9,
+                                scaleY: finalScaleY * 0.9,
+                                y: impactY + 18,
+                                duration: GUN_IMPACT_EXIT_MS,
+                                ease: "Cubic.easeIn",
+                                onComplete: () => {
+                                    if (this.gunImpactSprite === impact) {
+                                        this.clearGunImpactEffect();
+                                    }
+                                }
+                            });
+                        });
+                    }
                 });
+            }
+        });
+
+        this.scene.tweens.add({
+            targets: threatWash,
+            alpha: 0,
+            duration: wasLive ? 520 : 360,
+            ease: "Quad.easeOut",
+            onComplete: () => {
+                if (this.gunImpactWash === threatWash) {
+                    this.gunImpactWash = null;
+                }
+                threatWash.destroy();
             }
         });
 

@@ -45,7 +45,7 @@
 
     <button
       v-if="currentScreen === 'game'"
-      class="in-game-settings-btn bb-btn bb-btn--secondary bb-btn--sm"
+      class="in-game-settings-btn bb-btn bb-btn--secondary"
       type="button"
       aria-label="Open game settings"
       @click="showInGameSettings = true"
@@ -266,8 +266,23 @@ async function ensureJoinRoute(roomCode, replace = true) {
   }
 }
 
+async function ensureOfflineRoute(replace = false) {
+  if (route.name === 'Offline') return;
+
+  const target = { name: 'Offline' };
+  try {
+    if (replace) {
+      await router.replace(target);
+    } else {
+      await router.push(target);
+    }
+  } catch (err) {
+    logger.debug('offline_route_sync_failed', { error: err?.message || String(err) });
+  }
+}
+
 async function ensureHomeRoute(replace = true) {
-  if (!route.params.code) return;
+  if (route.name === 'Home' || route.path === '/') return;
   try {
     if (replace) {
       await router.replace({ name: 'Home' });
@@ -302,11 +317,11 @@ const showStartSyncOverlay = computed(() =>
   currentScreen.value === 'game' &&
   !gameStore.startGateOpen
 );
-const canLeaveCurrentMatch = computed(() =>
-  isMultiplayer.value &&
-  currentScreen.value === 'game' &&
-  gameStore.isActive
-);
+const canLeaveCurrentMatch = computed(() => {
+  if (currentScreen.value !== 'game') return false;
+  if (!isMultiplayer.value) return !!phaserGame.value;
+  return gameStore.isActive;
+});
 
 const countdownRemaining = computed(() => {
   if (startSyncPhase.value !== 'countdown') {
@@ -390,8 +405,9 @@ onMounted(async () => {
     playerName.value = savedName;
   }
 
+  const isOfflineRoute = route.name === 'Offline';
   const routeRoomCode = normalizeRoomCode(route.params.code);
-  const storedActiveRoomCode = migratedLocalState.activeRoomCode;
+  const storedActiveRoomCode = isOfflineRoute ? '' : migratedLocalState.activeRoomCode;
   pendingJoinCode.value = routeRoomCode || storedActiveRoomCode;
 
   // Listen for game-over event from Phaser
@@ -451,7 +467,8 @@ async function onStartGame({ onSuccess }) {
   isStartLeaving.value = true;
   isMultiplayer.value = false;
 
-  setTimeout(() => {
+  setTimeout(async () => {
+    await ensureOfflineRoute(false);
     currentScreen.value = 'game';
     isStartLeaving.value = false;
     onSuccess?.();
@@ -614,10 +631,19 @@ async function onLeaveLobby() {
 
 /**
  * Leave current active match and return to menu.
- * Best-effort marks local player as eliminated first, then exits room and clears resume state.
+ * In multiplayer this best-effort marks local player eliminated first.
  */
 async function onLeaveCurrentMatch() {
   if (!canLeaveCurrentMatch.value) {
+    showInGameSettings.value = false;
+    return;
+  }
+
+  if (!isMultiplayer.value) {
+    destroyPhaser();
+    gameStore.leaveGame();
+    await ensureHomeRoute();
+    currentScreen.value = 'start';
     showInGameSettings.value = false;
     return;
   }
@@ -664,6 +690,7 @@ async function onReplay() {
   destroyPhaser();
 
   if (!isMultiplayer.value) {
+    await ensureOfflineRoute(false);
     currentScreen.value = 'game';
     setTimeout(() => {
       createPhaser(gameResult.value.playerName);
@@ -957,17 +984,21 @@ watch(() => currentScreen.value, (screen) => {
 }
 
 .in-game-settings-btn {
-  position: fixed;
-  left: calc(env(safe-area-inset-left, 0px) + 0.7rem);
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 0.7rem);
-  width: 46px;
-  height: 46px;
-  min-height: 46px;
+  position: fixed !important;
+  top: auto !important;
+  right: auto !important;
+  left: calc(env(safe-area-inset-left, 0px) + 0.8rem) !important;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 0.8rem) !important;
+  width: 64px;
+  height: 64px;
+  min-height: 64px;
   padding: 0;
   border-radius: var(--bb-radius-pill);
-  font-size: 1.32rem;
+  display: grid;
+  place-items: center;
+  font-size: 2rem;
   line-height: 1;
-  z-index: 18;
+  z-index: 40;
 }
 
 .hidden {
@@ -1073,10 +1104,10 @@ watch(() => currentScreen.value, (screen) => {
 
 @media (max-width: 640px) {
   .in-game-settings-btn {
-    width: 42px;
-    height: 42px;
-    min-height: 42px;
-    font-size: 1.18rem;
+    width: 56px;
+    height: 56px;
+    min-height: 56px;
+    font-size: 1.8rem;
     border-radius: 30px;
   }
 

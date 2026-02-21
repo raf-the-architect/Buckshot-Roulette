@@ -3,8 +3,7 @@
     class="player-card bb-panel"
     :class="{
       'is-host': player.isHost,
-      'is-me': isMe,
-      'is-ready': player.isReady
+      'is-me': isMe
     }"
   >
     <div class="player-avatar">
@@ -12,7 +11,6 @@
         {{ getInitial }}
       </div>
       <div v-if="player.isHost" class="host-badge">👑</div>
-      <div v-if="player.isReady" class="ready-badge">✓</div>
     </div>
 
     <div class="player-info">
@@ -20,9 +18,7 @@
         {{ player.displayName }}
         <span v-if="isMe" class="you-tag">(You)</span>
       </span>
-      <span class="player-status" :class="{ ready: player.isReady }">
-        {{ player.isReady ? 'Ready' : 'Not Ready' }}
-      </span>
+      <span class="player-status">{{ player.isHost ? 'Host' : 'Player' }}</span>
     </div>
 
     <button
@@ -80,10 +76,6 @@ const getInitial = computed(() => {
   border-color: rgba(54, 124, 203, 0.8);
 }
 
-.player-card.is-ready {
-  box-shadow: 0 12px 24px rgba(16, 74, 137, 0.22), inset 0 0 0 2px rgba(86, 201, 122, 0.44);
-}
-
 .player-avatar {
   position: relative;
 }
@@ -107,22 +99,6 @@ const getInitial = computed(() => {
   top: -6px;
   right: -7px;
   font-size: 1rem;
-}
-
-.ready-badge {
-  position: absolute;
-  bottom: -4px;
-  right: -4px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: #fff;
-  background: linear-gradient(180deg, #7fdc95 0%, #49b467 100%);
-  border: 1px solid rgba(28, 106, 53, 0.56);
-  font-size: 0.72rem;
-  font-weight: 800;
 }
 
 .player-info {
@@ -151,10 +127,6 @@ const getInitial = computed(() => {
   color: var(--bb-text-secondary);
   font-size: 0.84rem;
   font-weight: 600;
-}
-
-.player-status.ready {
-  color: var(--bb-success);
 }
 
 .btn-kick {

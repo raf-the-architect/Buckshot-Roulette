@@ -40,6 +40,7 @@ const logger = createLogger('GameScene');
 const MULTIPLAYER_ACTION_ACK_TIMEOUT_MS = 8000;
 const MULTIPLAYER_ACTION_SYNC_LEAD_MS = 180;
 const MULTIPLAYER_ACTION_FALLBACK_DURATION_MS = 520;
+const MULTIPLAYER_SHOT_VISUAL_DURATION_MS = 1360;
 const REVEAL_SEEN_STORAGE_KEY = 'bang_or_blank_seen_round_reveal';
 const LEGACY_REVEAL_SEEN_STORAGE_KEY = 'buckshot_seen_round_reveal';
 const DANGER_SCREEN_DEPTH = 85;
@@ -74,6 +75,9 @@ export class GameScene extends Phaser.Scene {
     this.localPlayerIndex = 0;
     this.lastAfkUiSyncAtMs = 0;
     this.pendingMultiplayerItemSelection = null;
+    this.lockedTargetUserId = null;
+    this.lockedTargetMode = null;
+    this.lockedTargetActorUserId = null;
   }
 
   /**
@@ -99,6 +103,9 @@ export class GameScene extends Phaser.Scene {
     this.localPlayerIndex = 0;
     this.lastAfkUiSyncAtMs = 0;
     this.pendingMultiplayerItemSelection = null;
+    this.lockedTargetUserId = null;
+    this.lockedTargetMode = null;
+    this.lockedTargetActorUserId = null;
     this.dangerScreenOverlay = null;
     this.dangerScreenPulseTween = null;
     this.dangerScreenActive = false;
@@ -257,10 +264,10 @@ export class GameScene extends Phaser.Scene {
 
     const center = size / 2;
     const radial = ctx.createRadialGradient(center, center, size * 0.1, center, center, size * 0.66);
-    radial.addColorStop(0, 'rgba(28, 0, 0, 0)');
-    radial.addColorStop(0.44, 'rgba(70, 0, 0, 0.20)');
-    radial.addColorStop(0.72, 'rgba(120, 0, 0, 0.54)');
-    radial.addColorStop(1, 'rgba(76, 0, 0, 0.94)');
+    radial.addColorStop(0, 'rgba(20, 0, 0, 0)');
+    radial.addColorStop(0.32, 'rgba(72, 0, 0, 0.26)');
+    radial.addColorStop(0.62, 'rgba(140, 0, 0, 0.62)');
+    radial.addColorStop(1, 'rgba(94, 0, 0, 0.96)');
     ctx.fillStyle = radial;
     ctx.fillRect(0, 0, size, size);
 
@@ -329,16 +336,16 @@ export class GameScene extends Phaser.Scene {
 
     this.tweens.add({
       targets: this.dangerScreenOverlay,
-      alpha: 0.84,
+      alpha: 0.9,
       duration: 180,
       ease: 'Cubic.easeOut',
       onComplete: () => {
         if (!this.dangerScreenActive || !this.dangerScreenOverlay) return;
         this.dangerScreenPulseTween = this.tweens.add({
           targets: this.dangerScreenOverlay,
-          alpha: { from: 0.74, to: 0.89 },
-          scale: { from: 1, to: 1.02 },
-          duration: 620,
+          alpha: { from: 0.78, to: 0.96 },
+          scale: { from: 1, to: 1.04 },
+          duration: 460,
           ease: 'Sine.easeInOut',
           yoyo: true,
           repeat: -1
@@ -490,6 +497,9 @@ export class GameScene extends Phaser.Scene {
     this.betweenRounds = false;
     this.targetedIndex = null;
     this.selectedTargetId = null;
+    this.lockedTargetUserId = null;
+    this.lockedTargetMode = null;
+    this.lockedTargetActorUserId = null;
     this.lastRevealedRoundNumber = null;
     this.processedActionIds = new Set();
     this.pendingMultiplayerAction = null;
@@ -862,7 +872,9 @@ export class GameScene extends Phaser.Scene {
       }
 
       if (game.turnNumber !== lastTurnNumber) {
-        this.clearTargetSelection();
+        if (!this.lockedTargetUserId) {
+          this.clearTargetSelection();
+        }
         logger.info('turn_changed', {
           turnNumber: game.turnNumber,
           localTurnIndex: this.state.currentTurnIndex
@@ -1200,6 +1212,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.pendingMultiplayerAction = null;
+    this.clearLockedTarget();
     this.isProcessing = false;
     this.updateButtonStates();
   }
@@ -1284,6 +1297,12 @@ export class GameScene extends Phaser.Scene {
       const shotType = resolvedTargetIndex === resolvedActorIndex ? 'SHOOT_SELF' : 'SHOOT_PLAYER';
       const wasLive = result.roundType === 'live';
       const shouldShowGunImpact = resolvedTargetIndex === localIndex;
+      const resolvedTargetUserId =
+        this.state.players[resolvedTargetIndex]?.userId ||
+        this.state.players[resolvedTargetIndex]?.id ||
+        action.targetId ||
+        null;
+      this.lockTargetForAction(resolvedTargetUserId, 'shoot', action.playerId || null);
 
       this.action.showActionIndicator(actorId, shotType);
       this.gun.rotateToTarget(resolvedTargetIndex, () => {
@@ -1299,9 +1318,17 @@ export class GameScene extends Phaser.Scene {
           this.effects.playDamageEffect(resolvedTargetIndex);
         }
 
-        this.time.delayedCall(220, () => {
+        this.time.delayedCall(MULTIPLAYER_SHOT_VISUAL_DURATION_MS, () => {
+          if (this.lockedTargetUserId === resolvedTargetUserId && this.lockedTargetMode === 'shoot') {
+            this.clearLockedTarget();
+          }
+          if (actorIsMe && this.selectedTargetId === resolvedTargetUserId) {
+            this.clearTargetSelection();
+            this.syncTurnTargetSelection(null, null);
+          }
           this.gun.resetToNeutral();
           this.gun.resetKnifeVisuals();
+          this.render();
         });
       });
 
@@ -1315,9 +1342,6 @@ export class GameScene extends Phaser.Scene {
       }
       this.nextAmmoRevealed = null;
       this.gun.hideNextAmmo();
-      if (actorIsMe) {
-        this.clearTargetSelection();
-      }
       logger.debug('action_stream_shoot_result', {
         actionId: action.id,
         actorId,
@@ -1333,7 +1357,7 @@ export class GameScene extends Phaser.Scene {
         roundAfter: result.roundAfter,
         gameEnded: !!result.gameEnded
       });
-      return 1000;
+      return MULTIPLAYER_SHOT_VISUAL_DURATION_MS;
     }
 
     if (action.type === 'item_use') {
@@ -1509,6 +1533,32 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
+   * Clear transient action lock used to keep target visuals stable during shot animations.
+   */
+  clearLockedTarget() {
+    this.lockedTargetUserId = null;
+    this.lockedTargetMode = null;
+    this.lockedTargetActorUserId = null;
+  }
+
+  /**
+   * Lock target visuals to a concrete user/mode until action animation completes.
+   * @param {string | null} targetUserId - Target user id.
+   * @param {'shoot' | 'item'} targetMode - Visual lock mode.
+   * @param {string | null} actorUserId - Optional action actor user id.
+   */
+  lockTargetForAction(targetUserId = null, targetMode = 'shoot', actorUserId = null) {
+    if (!targetUserId) {
+      this.clearLockedTarget();
+      return;
+    }
+
+    this.lockedTargetUserId = targetUserId;
+    this.lockedTargetMode = targetMode === 'item' ? 'item' : 'shoot';
+    this.lockedTargetActorUserId = actorUserId || null;
+  }
+
+  /**
    * Sync selected target in shared turn context for multiplayer visibility.
    * @param {string | null} targetUserId - Selected target user id.
    * @param {'shoot' | 'item' | null} targetMode - Selection mode.
@@ -1560,44 +1610,70 @@ export class GameScene extends Phaser.Scene {
 
   /**
    * Resolve which target highlight should be rendered.
-   * Local interactive selection has priority; otherwise use synchronized turn target.
+   * Priority order: local selection -> locked action target -> synchronized turn target.
    * @returns {number | null}
    */
   resolveDisplayedTargetIndex() {
-    const localTargetId = this.canSelectTarget() ? (this.selectedTargetId || null) : null;
-    const targetId = localTargetId || this.getSyncedTurnTargetId();
+    const localTargetId = this.selectedTargetId || null;
+    const targetId = localTargetId || this.lockedTargetUserId || this.getSyncedTurnTargetId();
     return this.resolveTargetIndexFromUserId(targetId);
   }
 
   /**
-   * Resolve which target should receive danger overlay.
-   * Overlay is restricted to shoot targeting mode only.
-   * @returns {number | null}
+   * Resolve effective shoot target id used for danger visuals.
+   * @returns {string | null}
    */
-  resolveDangerTargetIndex() {
-    if (!this.state?.players?.length) return null;
-
-    const myUserId = this.getMyUserId();
-    if (!myUserId) return null;
-
-    const hasLocalSelection = this.canSelectTarget() && !!this.selectedTargetId;
-    const localMode = hasLocalSelection
-      ? (this.isAwaitingHandcuffTargetSelection() ? 'item' : 'shoot')
-      : null;
+  resolveEffectiveShootTargetId() {
+    const hasLocalSelection = !!this.selectedTargetId;
+    const localMode = hasLocalSelection ? (this.isAwaitingHandcuffTargetSelection() ? 'item' : 'shoot') : null;
     const localTargetId = hasLocalSelection ? this.selectedTargetId : null;
 
     const syncedTargetId = this.getSyncedTurnTargetId();
     const syncedMode = this.getSyncedTurnTargetMode();
 
-    const effectiveMode = localMode || syncedMode;
-    const effectiveTargetId = localTargetId || syncedTargetId;
-    const actorUserId = this.getTurnActorUserId();
+    const effectiveMode = localMode || this.lockedTargetMode || syncedMode;
+    const effectiveTargetId = localTargetId || this.lockedTargetUserId || syncedTargetId;
 
     if (effectiveMode !== 'shoot') return null;
-    if (!effectiveTargetId || effectiveTargetId !== myUserId) return null;
-    if (!actorUserId || actorUserId === myUserId) return null;
+    return effectiveTargetId || null;
+  }
 
-    return this.resolveTargetIndexFromUserId(effectiveTargetId);
+  /**
+   * Resolve which target should receive player-level danger overlay.
+   * @returns {number | null}
+   */
+  resolveDangerTargetIndex() {
+    if (!this.state?.players?.length) return null;
+    return this.resolveTargetIndexFromUserId(this.resolveEffectiveShootTargetId());
+  }
+
+  /**
+   * Resolve which target should receive full-screen danger overlay.
+   * Overlay is shown only on the locally targeted player's screen.
+   * @returns {number | null}
+   */
+  resolveIncomingDangerTargetIndex() {
+    if (!this.state?.players?.length) return null;
+
+    const myUserId = this.getMyUserId();
+    const effectiveTargetId = this.resolveEffectiveShootTargetId();
+    if (!effectiveTargetId) return null;
+
+    const localIndex = this.getLocalPlayerIndex();
+    const localPlayer = this.state.players[localIndex];
+    const localPlayerId = localPlayer?.userId || localPlayer?.id || myUserId || null;
+
+    if (!localPlayerId || effectiveTargetId !== localPlayerId) return null;
+
+    const actorFromTurn = this.getTurnActorUserId();
+    const actorFromState =
+      this.state.players[this.state.currentTurnIndex]?.userId ||
+      this.state.players[this.state.currentTurnIndex]?.id ||
+      null;
+    const actorUserId = this.lockedTargetActorUserId || actorFromTurn || actorFromState;
+
+    if (!actorUserId || actorUserId === localPlayerId || actorUserId === myUserId) return null;
+    return localIndex;
   }
 
   // ==========================================================================
@@ -1625,8 +1701,21 @@ export class GameScene extends Phaser.Scene {
     });
 
     if (this.isMultiplayer && actionData.type?.startsWith('SHOOT')) {
-      this.clearTargetSelection();
-      this.syncTurnTargetSelection(null, null);
+      const myUserId = this.getMyUserId();
+      let targetUserId = actionData.targetId || this.selectedTargetId || null;
+
+      if (!targetUserId && actionData.type === 'SHOOT_SELF') {
+        targetUserId = myUserId;
+      }
+
+      if (!targetUserId && actionData.type === 'SHOOT_PLAYER') {
+        targetUserId = this.getSyncedTurnTargetId();
+      }
+
+      this.lockTargetForAction(targetUserId, 'shoot', myUserId);
+      if (targetUserId) {
+        this.syncTurnTargetSelection(targetUserId, 'shoot');
+      }
       this.updateButtonStates();
     }
 
@@ -1655,6 +1744,7 @@ export class GameScene extends Phaser.Scene {
       this.pendingMultiplayerItemSelection = nextMode;
       if (nextMode) {
         this.clearTargetSelection();
+        this.clearLockedTarget();
         this.syncTurnTargetSelection(null, null);
       }
 
@@ -1721,8 +1811,10 @@ export class GameScene extends Phaser.Scene {
           targetUserId = opponent?.userId;
         }
 
+        this.lockTargetForAction(targetUserId || null, 'shoot', myUserId);
         await this.gameStore.performShoot(targetUserId);
       } else if (actionData.type === 'SHOOT_SELF') {
+        this.lockTargetForAction(myUserId || null, 'shoot', myUserId);
         await this.gameStore.performShoot(myUserId);
       } else if (actionData.type === 'USE_ITEM') {
         const normalizedItem = this.normalizeItemKey(actionData.item);
@@ -1754,6 +1846,7 @@ export class GameScene extends Phaser.Scene {
 
       this.pendingMultiplayerItemSelection = null;
       this.pendingMultiplayerAction = null;
+      this.clearLockedTarget();
       this.isProcessing = false;
       this.updateButtonStates();
     }
@@ -1812,11 +1905,14 @@ export class GameScene extends Phaser.Scene {
       );
 
       if (this.selectedTargetId && !hasAliveTarget(this.selectedTargetId)) {
+        if (this.lockedTargetUserId === this.selectedTargetId) {
+          this.clearLockedTarget();
+        }
         this.clearTargetSelection();
       }
     }
 
-    if (!this.canSelectTarget() && (this.selectedTargetId || this.targetedIndex !== null)) {
+    if (!this.canSelectTarget() && !this.lockedTargetUserId && (this.selectedTargetId || this.targetedIndex !== null)) {
       this.clearTargetSelection();
     }
 
@@ -1825,8 +1921,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     const displayedTargetIndex = this.resolveDisplayedTargetIndex();
-    const dangerTargetIndex = this.resolveDangerTargetIndex();
-    this.updateDangerScreenEffect(dangerTargetIndex);
+    const screenDangerTargetIndex = this.resolveIncomingDangerTargetIndex();
+    this.updateDangerScreenEffect(screenDangerTargetIndex);
     this.players.updateAvatarStates(this.state, displayedTargetIndex, null);
     this.players.renderHearts(this.state);
     this.hud.update(this.state);

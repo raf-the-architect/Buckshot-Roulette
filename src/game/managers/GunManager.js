@@ -112,8 +112,9 @@ export class GunManager {
     revealNextAmmo(nextRound) {
         const layout = this.getLayout();
         const scale = this.getScale();
+        const isLiveRound = !!nextRound;
 
-        const ammoKey = nextRound ? "ammoFilled" : "ammoEmpty";
+        const ammoKey = isLiveRound ? "ammoFilled" : "ammoEmpty";
         this.nextAmmoSprite.setTexture(ammoKey);
         this.nextAmmoSprite.setVisible(true);
         this.nextAmmoSprite.setAlpha(0);
@@ -127,14 +128,38 @@ export class GunManager {
             ease: 'Back.easeOut'
         });
 
-        const glow = this.scene.add.circle(layout.CENTER_X, layout.NEXT_AMMO_ZONE.y, 22, nextRound ? 0xc62828 : 0x4a90d9, 0.35);
+        const glow = this.scene.add.circle(
+            layout.CENTER_X,
+            layout.NEXT_AMMO_ZONE.y,
+            isLiveRound ? 28 : 22,
+            isLiveRound ? 0xc62828 : 0x4a90d9,
+            isLiveRound ? 0.46 : 0.3
+        );
         this.scene.tweens.add({
             targets: glow,
-            scale: { from: 0.5, to: 1.8 },
+            scale: { from: 0.5, to: isLiveRound ? 2.25 : 1.7 },
             alpha: 0,
-            duration: 450,
+            duration: isLiveRound ? 560 : 420,
             onComplete: () => glow.destroy()
         });
+
+        if (isLiveRound) {
+            const threatWash = this.scene.add.rectangle(
+                layout.CENTER_X,
+                layout.HEIGHT / 2,
+                layout.WIDTH,
+                layout.HEIGHT,
+                0x6d0505,
+                0.2
+            ).setDepth(92);
+
+            this.scene.tweens.add({
+                targets: threatWash,
+                alpha: 0,
+                duration: 320,
+                onComplete: () => threatWash.destroy()
+            });
+        }
     }
 
     /**

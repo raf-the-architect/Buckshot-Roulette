@@ -43,6 +43,8 @@ export const MAX_ITEMS = 8;
 // Min/Max players
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 8;
+const SHOTGUN_TOTAL_MIN = 4;
+const SHOTGUN_TOTAL_MAX = 9;
 
 // =========================================================================
 // STATE CREATION
@@ -132,6 +134,34 @@ export function calculateInitialHealth(playerCount) {
   if (playerCount <= 2) return 4;
   if (playerCount <= 4) return 3;
   return 2;
+}
+
+/**
+ * Random integer in inclusive range.
+ * @param {number} min - Minimum value.
+ * @param {number} max - Maximum value.
+ * @param {Function} randomFn - RNG source returning [0, 1).
+ * @returns {number}
+ */
+function randomIntInclusive(min, max, randomFn) {
+  if (max <= min) return min;
+  return Math.floor(randomFn() * (max - min + 1)) + min;
+}
+
+/**
+ * Resolve randomized shotgun counts for a round.
+ * Always includes at least one live and one blank.
+ * @param {number} roundNumber - Round number.
+ * @param {Function} randomFn - RNG source returning [0, 1).
+ * @returns {{ live: number, blank: number }}
+ */
+function rollShotgunCounts(roundNumber, randomFn) {
+  const normalizedRound = Math.max(1, Number(roundNumber) || 1);
+  const maxTotal = Math.min(SHOTGUN_TOTAL_MAX, SHOTGUN_TOTAL_MIN + 2 + normalizedRound);
+  const totalRounds = randomIntInclusive(SHOTGUN_TOTAL_MIN, maxTotal, randomFn);
+  const live = randomIntInclusive(1, totalRounds - 1, randomFn);
+  const blank = totalRounds - live;
+  return { live, blank };
 }
 
 // =========================================================================
@@ -245,14 +275,8 @@ export function validateActionIntent(state, action, playerId) {
 
 export function refillShotgun(state, rng) {
   const nextRoundNumber = (state.roundNumber || 0) + 1;
-
-  // Align offline round profile with multiplayer pacing while keeping random chamber order.
-  const live = nextRoundNumber === 1
-    ? 2
-    : Math.min(nextRoundNumber + 1, 4);
-  const blank = nextRoundNumber === 1
-    ? 4
-    : Math.min(nextRoundNumber + 2, 5);
+  const randomFn = typeof rng?.random === "function" ? () => rng.random() : Math.random;
+  const { live, blank } = rollShotgunCounts(nextRoundNumber, randomFn);
   
   let rounds = [];
   for (let i = 0; i < live; i++) rounds.push(true);
@@ -260,7 +284,7 @@ export function refillShotgun(state, rng) {
   
   // Shuffle using RNG (Fisher-Yates)
   for (let i = rounds.length - 1; i > 0; i--) {
-    const j = Math.floor(rng.random() * (i + 1));
+    const j = Math.floor(randomFn() * (i + 1));
     [rounds[i], rounds[j]] = [rounds[j], rounds[i]];
   }
   

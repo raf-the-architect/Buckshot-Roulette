@@ -38,25 +38,6 @@
       />
     </div>
 
-    <GamePanel class="lobby-actions-panel" ribbon-text="Ready Check">
-      <div class="lobby-actions">
-        <GameButton
-          v-if="!isReady"
-          variant="secondary"
-          @click="setReady(true)"
-        >
-          Ready
-        </GameButton>
-        <GameButton
-          v-else
-          variant="secondary"
-          @click="setReady(false)"
-        >
-          Cancel Ready
-        </GameButton>
-      </div>
-    </GamePanel>
-
     <div class="lobby-bottom-actions bb-panel" :class="{ host: roomStore.isHost }">
       <GameButton
         v-if="roomStore.isHost"
@@ -74,7 +55,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 import { useAuthStore } from '@/stores/authStore';
 import { useRoomStore } from '@/stores/roomStore';
 import { useGameStore } from '@/stores/gameStore';
@@ -92,15 +73,6 @@ const roomStore = useRoomStore();
 const gameStore = useGameStore();
 const logger = createLogger('LobbyView');
 const showSettings = ref(false);
-
-const isReady = computed(() => {
-  const me = roomStore.roomPlayers.find((p) => p.userId === authStore.userId);
-  return me?.isReady || false;
-});
-
-const setReady = (ready) => {
-  roomStore.setReady(ready);
-};
 
 const startGame = async () => {
   try {
@@ -208,16 +180,6 @@ const copyLink = async () => {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 0.85rem;
-}
-
-.lobby-actions-panel {
-  margin-bottom: 0;
-}
-
-.lobby-actions {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.6rem;
 }
 
 .lobby-bottom-actions {
