@@ -9,13 +9,14 @@ import { ITEM_KEYS } from "./gameLogic.js";
 const GUN_IMPACT_DEPTH = 90;
 const GUN_IMPACT_ANTICIPATION_MS = 140;
 const GUN_IMPACT_LUNGE_MS = 200;
-const GUN_IMPACT_HOLD_MS = 760;
 const GUN_IMPACT_EXIT_MS = 260;
-const GUN_IMPACT_TOTAL_MS =
+const GUN_IMPACT_BASE_ANIM_MS =
     GUN_IMPACT_ANTICIPATION_MS +
     GUN_IMPACT_LUNGE_MS +
-    GUN_IMPACT_HOLD_MS +
     GUN_IMPACT_EXIT_MS;
+export const GUN_IMPACT_SOUND_LEAD_MS = 40;
+export const GUNSHOT_SOUND_DURATION_MS = 2000;
+export const GUN_IMPACT_SYNC_WINDOW_MS = GUN_IMPACT_SOUND_LEAD_MS + GUNSHOT_SOUND_DURATION_MS;
 
 export class EffectsManager {
     constructor(scene) {
@@ -132,18 +133,24 @@ export class EffectsManager {
 
     /**
      * Play high-impact revolver overlay animation.
-     * @param {{targetIndex?: number, wasLive?: boolean, shouldDisplay?: boolean}} params
+     * @param {{targetIndex?: number, wasLive?: boolean, shouldDisplay?: boolean, durationMs?: number}} params
      * @returns {number} Effect duration in milliseconds.
      */
     playGunImpactEffect(params = {}) {
         const {
             targetIndex = null,
             wasLive = false,
-            shouldDisplay = true
+            shouldDisplay = true,
+            durationMs = GUN_IMPACT_SYNC_WINDOW_MS
         } = params;
 
         this.clearGunImpactEffect();
         if (!shouldDisplay) return 0;
+
+        const resolvedDurationMs = Number.isFinite(durationMs)
+            ? Math.max(durationMs, GUN_IMPACT_BASE_ANIM_MS)
+            : GUN_IMPACT_SYNC_WINDOW_MS;
+        const holdMs = Math.max(0, resolvedDurationMs - GUN_IMPACT_BASE_ANIM_MS);
 
         const layout = this.getLayout();
         const targetContainer = Number.isInteger(targetIndex)
@@ -242,7 +249,7 @@ export class EffectsManager {
                             repeat: -1
                         });
 
-                        this.scene.time.delayedCall(GUN_IMPACT_HOLD_MS, () => {
+                        this.scene.time.delayedCall(holdMs, () => {
                             if (!this.gunImpactSprite || this.gunImpactSprite !== impact) return;
                             jitterTween.stop();
                             jitterTween.remove();
@@ -282,7 +289,7 @@ export class EffectsManager {
             }
         });
 
-        return GUN_IMPACT_TOTAL_MS;
+        return resolvedDurationMs;
     }
 
     // ==========================================================================

@@ -4,11 +4,12 @@
  */
 
 import { applyAction, ITEM_KEYS } from "../gameLogic.js";
-import { ITEM_ASSET_MAP, SCALE } from "../LayoutConfig.js";
+import { ITEM_ASSET_MAP } from "../LayoutConfig.js";
+import { GUN_IMPACT_SOUND_LEAD_MS, GUN_IMPACT_SYNC_WINDOW_MS } from "../EffectsManager.js";
 import { createLogger } from "@/utils/logger";
 
 const logger = createLogger("ActionHandler");
-const SHOT_RECOVERY_DELAY_MS = 1320;
+const SHOT_RECOVERY_DELAY_MS = GUN_IMPACT_SYNC_WINDOW_MS;
 
 export class ActionHandler {
     constructor(scene) {
@@ -230,17 +231,27 @@ export class ActionHandler {
 
             this.scene.nextAmmoRevealed = null;
             this.scene.gun.hideNextAmmo();
-
-            if (wasLive) {
-                this.scene.sound.play("sndGunshot");
-            } else {
-                this.scene.sound.play("sndDryFire");
-            }
-            this.scene.effects.playShootEffect(wasLive, normalizedAction);
+            const localIndex = this.scene.getLocalPlayerIndex?.() ?? 0;
+            const shouldDisplayGunImpact = targetIndex === localIndex && actorIndex !== localIndex;
             this.scene.effects.playGunImpactEffect({
                 targetIndex,
                 wasLive,
-                shouldDisplay: true
+                shouldDisplay: shouldDisplayGunImpact,
+                durationMs: SHOT_RECOVERY_DELAY_MS
+            });
+            this.scene.time.delayedCall(GUN_IMPACT_SOUND_LEAD_MS, () => {
+                if (wasLive) {
+                    this.scene.sound.play("sndGunshot");
+                } else {
+                    this.scene.sound.play("sndDryFire");
+                }
+                this.scene.effects.playShootEffect(wasLive, normalizedAction);
+
+                this.scene.state.players.forEach((p, i) => {
+                    if (p.health < prevHealth[i]) {
+                        this.scene.effects.playDamageEffect(i);
+                    }
+                });
             });
 
             const crossedRevolvers = this.scene.gun.getCrossedRevolversSprite();
@@ -248,12 +259,6 @@ export class ActionHandler {
             crossedRevolvers.setVisible(false);
             gunSprite.setVisible(true);
             gunSprite.clearTint();
-
-            this.scene.state.players.forEach((p, i) => {
-                if (p.health < prevHealth[i]) {
-                    this.scene.effects.playDamageEffect(i);
-                }
-            });
         }
 
         if (normalizedAction.type === "USE_ITEM") {

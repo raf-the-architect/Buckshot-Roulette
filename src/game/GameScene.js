@@ -12,7 +12,11 @@ import { ITEMS } from '@/utils/constants';
 import { createLogger } from '@/utils/logger';
 
 // Managers
-import { EffectsManager } from './EffectsManager.js';
+import {
+  EffectsManager,
+  GUN_IMPACT_SOUND_LEAD_MS,
+  GUN_IMPACT_SYNC_WINDOW_MS
+} from './EffectsManager.js';
 import { AIController } from './AIController.js';
 import { HUDManager } from './managers/HUDManager.js';
 import { PlayerManager } from './managers/PlayerManager.js';
@@ -40,7 +44,7 @@ const logger = createLogger('GameScene');
 const MULTIPLAYER_ACTION_ACK_TIMEOUT_MS = 8000;
 const MULTIPLAYER_ACTION_SYNC_LEAD_MS = 180;
 const MULTIPLAYER_ACTION_FALLBACK_DURATION_MS = 520;
-const MULTIPLAYER_SHOT_VISUAL_DURATION_MS = 1360;
+const MULTIPLAYER_SHOT_VISUAL_DURATION_MS = GUN_IMPACT_SYNC_WINDOW_MS;
 const REVEAL_SEEN_STORAGE_KEY = 'bang_or_blank_seen_round_reveal';
 const LEGACY_REVEAL_SEEN_STORAGE_KEY = 'buckshot_seen_round_reveal';
 const DANGER_SCREEN_DEPTH = 85;
@@ -1296,7 +1300,7 @@ export class GameScene extends Phaser.Scene {
         : (action.targetId === myUserId ? localIndex : (fallbackOpponentIndex >= 0 ? fallbackOpponentIndex : localIndex));
       const shotType = resolvedTargetIndex === resolvedActorIndex ? 'SHOOT_SELF' : 'SHOOT_PLAYER';
       const wasLive = result.roundType === 'live';
-      const shouldShowGunImpact = resolvedTargetIndex === localIndex;
+      const shouldShowGunImpact = resolvedTargetIndex === localIndex && resolvedActorIndex !== localIndex;
       const resolvedTargetUserId =
         this.state.players[resolvedTargetIndex]?.userId ||
         this.state.players[resolvedTargetIndex]?.id ||
@@ -1306,17 +1310,20 @@ export class GameScene extends Phaser.Scene {
 
       this.action.showActionIndicator(actorId, shotType);
       this.gun.rotateToTarget(resolvedTargetIndex, () => {
-        this.effects.playShootEffect(wasLive, { type: shotType });
         this.effects.playGunImpactEffect({
           targetIndex: resolvedTargetIndex,
           wasLive,
-          shouldDisplay: shouldShowGunImpact
+          shouldDisplay: shouldShowGunImpact,
+          durationMs: MULTIPLAYER_SHOT_VISUAL_DURATION_MS
         });
-        this.sound.play(wasLive ? 'sndGunshot' : 'sndDryFire');
+        this.time.delayedCall(GUN_IMPACT_SOUND_LEAD_MS, () => {
+          this.effects.playShootEffect(wasLive, { type: shotType });
+          this.sound.play(wasLive ? 'sndGunshot' : 'sndDryFire');
 
-        if (wasLive && (result.damage || 0) > 0) {
-          this.effects.playDamageEffect(resolvedTargetIndex);
-        }
+          if (wasLive && (result.damage || 0) > 0) {
+            this.effects.playDamageEffect(resolvedTargetIndex);
+          }
+        });
 
         this.time.delayedCall(MULTIPLAYER_SHOT_VISUAL_DURATION_MS, () => {
           if (this.lockedTargetUserId === resolvedTargetUserId && this.lockedTargetMode === 'shoot') {
